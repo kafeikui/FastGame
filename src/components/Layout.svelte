@@ -13,7 +13,7 @@
   import MessageBoard from "./MessageBoard.svelte";
   import { onMount } from "svelte";
   import RuleBoard from "./RuleBoard.svelte";
-  import RulePicker from "./RulePicker.svelte";
+  import RulePicker, { buildRuleDesc } from "./RulePicker.svelte";
   let playerHand, AIHand;
   let playerDuckData;
   let AIDuckData;
@@ -106,7 +106,7 @@
   function handleRulePick(event) {
     let mode = event.detail.mode;
     ruleMode = buildRuleMode(0, mode);
-    newMessage("the Player picks rule " + buildRuleDesc(mode));
+    newMessage("The Player picks rule " + buildRuleDesc(mode));
     oHidden.style.display = "none";
     onRulePick = false;
   }
@@ -118,10 +118,9 @@
 
   function initMessageBoard() {
     messageBoard.initMessages(
-      [
-        "Welcome! The AI wants to have a card battle! ",
-        "5 rounds per game, and the one who first gets 2 games win!",
-      ].map(messageBoard.createMessage)
+      ["Welcome! The AI wants to have a card battle! ", "Best of three!"].map(
+        messageBoard.createMessage
+      )
     );
   }
 
@@ -182,10 +181,10 @@
     // when draw, the one who decided the rule wins and gets 1 point
     if (res > 0) {
       playerPoint += res;
-      newMessage("player win this round! (points: " + res + ")");
+      newMessage("Player won this round! (points: " + res + ")");
     } else if (res < 0) {
       AIPoint -= res;
-      newMessage("AI win this round! (points: " + -res + ")");
+      newMessage("AI won this round! (points: " + -res + ")");
     } else {
       let role = ruleMode.role;
       if (role === 0) {
@@ -209,26 +208,26 @@
         roleToPickRule = 1;
         if (playerBalls[0].win) {
           playerBalls[1].win = true;
-          newMessage("player win! thanks for playing! " + printGameScores());
+          newMessage("Player won! Thanks for playing! " + printGameScores());
         } else {
           playerBalls[0].win = true;
-          newMessage("player win the game! " + printGameScores());
+          newMessage("Player won the game! " + printGameScores());
           canNext = true;
         }
       } else if (playerPoint < AIPoint) {
         roleToPickRule = 0;
         if (AIBalls[0].win) {
           AIBalls[1].win = true;
-          newMessage("AI win! thanks for playing! " + printGameScores());
+          newMessage("AI won! Thanks for playing! " + printGameScores());
         } else {
           AIBalls[0].win = true;
-          newMessage("AI win the game! " + printGameScores());
+          newMessage("AI won the game! " + printGameScores());
           canNext = true;
         }
       } else {
         roleToPickRule = 1;
         newMessage(
-          "draw this round! let's continue! AI will pick the rule!" +
+          "Draw this round! Let's continue! AI will pick the rule!" +
             printGameScores()
         );
         canNext = true;
@@ -288,21 +287,7 @@
   function AIRollRuleMode() {
     let mode = Math.ceil(Math.random() * 2);
     ruleMode = buildRuleMode(1, mode);
-    newMessage("the AI picks rule " + buildRuleDesc(mode));
-  }
-
-  function buildRuleDesc(mode) {
-    let ruleDesc;
-    if (mode === 1) {
-      ruleDesc =
-        mode +
-        ": same type, higher points win! While different type, lower points win!";
-    } else if (mode === 2) {
-      ruleDesc =
-        mode +
-        ": same type, lower points win! While different type, higher points win! ";
-    }
-    return ruleDesc;
+    newMessage("The AI picks " + buildRuleDesc(mode));
   }
 
   // role: 0-player 1-AI
@@ -336,7 +321,7 @@
         height="100"
         width="100"
       />
-      <span slot="name"> 江湖小虾米 </span>
+      <span slot="name"> Card Beginner </span>
       <span slot="level"> 1 </span>
       <span slot="win"> 0 </span>
       <span slot="lose"> 0 </span>
@@ -358,7 +343,7 @@
         height="100"
         width="100"
       />
-      <span slot="name"> 牌宗强者 </span>
+      <span slot="name"> Card Sensei </span>
       <span slot="level"> 99 </span>
       <span slot="win"> 999 </span>
       <span slot="lose"> Never </span>

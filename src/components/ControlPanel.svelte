@@ -21,17 +21,17 @@
 <div class="panelBoard">
 	<div class="panel">
 		<button class="font" disabled={!enablePlay} on:click={play}>
-			打出
+			Play
 		</button>
 	</div>
 	<div class="panel">
 		<button class="font" disabled={!enableNext} on:click={next}>
-			继续
+			Continue
 		</button>
 	</div>
 	<div class="panel">
 		<button class="font" disabled={!enableRestart} on:click={restart}>
-			重开
+			Restart
 		</button>
 	</div>
 </div>
@@ -54,6 +54,6 @@
 
 	.font {
 		font-family: "Comic Sans MS", cursive;
-		font-size: 2em;
+		font-size: 1.6em;
 	}
 </style>
