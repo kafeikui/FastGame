@@ -7,6 +7,8 @@ Build a local chain and deploy [BLS-TSS-Network](https://github.com/ARPA-Network
 ```
 cd contracts
 
+# Make sure local_test_account_address has enough ether
+
 forge create --private-key <local_test_account_private_key> src/CardGame.sol:CardGame --constructor-args <randcast_adapter_address> --rpc-url <chain_provider>
 
 # Deployed to <CardGame_address>
@@ -28,6 +30,12 @@ cast send <randcast_adapter_address> "fundSubscription(uint64)" <sub_id> --value
 
 cast send <randcast_adapter_address> "addConsumer(uint64,address)" <sub_id> <CardGame_address> --rpc-url <chain_provider> --private-key <local_test_account_private_key>
 ```
+
+Copy `contracts/out/CardGame.sol/CardGame.json` to `src/utils/web3/const/`.
+
+Copy the `<CardGame_address>` as `contractAddress`, `<local_test_account_private_key>` as `account` to `src/utils/web3/const/GameConfig.json`.
+
+Set the websocket chain provider as `websocketProvider` in `src/utils/web3/const/GameConfig.json`.
 
 Install the npm dependencies
 
