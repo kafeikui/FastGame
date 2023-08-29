@@ -1,10 +1,11 @@
 <script>
+  import Web3 from "web3";
   import Player from "./Player.svelte";
   import Hand from "./Hand.svelte";
   import BattleBoard from "./BattleBoard.svelte";
   import WinballBoard from "./WinballBoard.svelte";
   import Card, {
-    getRndomDuck,
+    getRandomDuckOnChain,
     getRndomCardFromDuck,
     clearCardPlayFlag,
     bgPooker,
@@ -14,6 +15,13 @@
   import { onMount } from "svelte";
   import RuleBoard from "./RuleBoard.svelte";
   import RulePicker, { buildRuleDesc } from "./RulePicker.svelte";
+  import {
+    initListeners,
+    clearLastRandomness,
+    getRandom,
+    getLastRandomness,
+  } from "./RandomGenerator.svelte";
+  import configJSON from "../utils/web3/const/GameConfig.json";
   let playerHand, AIHand;
   let playerDuckData;
   let AIDuckData;
@@ -32,17 +40,22 @@
   let focusCard, focusIndex;
   let messageBoard;
   let canNext;
-  let ruleMode = {};
+  let ruleMode = { role: -1, mode: -1 };
   let oHidden;
   let onRulePick;
 
   onMount(() => {
     setTimeout(() => {
+      let web3 = new Web3(
+        new Web3.providers.WebsocketProvider(configJSON.websocketProvider)
+      );
+      web3.eth.accounts.wallet.add(configJSON.account);
+      initListeners(web3, configJSON.contractAddress);
       init();
     }, 100);
   });
 
-  function init() {
+  async function init() {
     playerBalls = [
       { id: "0", win: false },
       { id: "1", win: false },
@@ -54,11 +67,23 @@
     // AI picks the rule at first
     roleToPickRule = 1;
     initMessageBoard();
+
     nextGame();
   }
 
-  function nextGame() {
+  async function requestSeed() {
+    clearLastRandomness();
+    await getRandom();
+    const wait = (timeout) => new Promise((res) => setTimeout(res, timeout));
+    while (getLastRandomness() === undefined) {
+      await wait(1000);
+    }
+  }
+
+  async function nextGame() {
     clearCardPlayFlag();
+    (playerDuck = []), (AIDuck = []);
+    ruleMode = { role: -1, mode: -1 };
     playButton = false;
     canNext = false;
     playerBattleCard = undefined;
@@ -80,9 +105,11 @@
       { vague: false },
       { vague: false },
     ];
+    newMessage("Requesting randomness...");
+    await requestSeed();
     // actually player and AI can't chooose the same card
-    playerDuckData = getRndomDuck(5, 2);
-    AIDuckData = getRndomDuck(5, 2);
+    playerDuckData = getRandomDuckOnChain(getLastRandomness(), 5, 2);
+    AIDuckData = getRandomDuckOnChain(getLastRandomness(), 5, 2);
     clearCardPlayFlag();
     playerDuck = playerDuckData.slice(0);
     AIDuck = [bgPooker, bgPooker, AIDuckData[2], AIDuckData[3], AIDuckData[4]];
@@ -118,7 +145,7 @@
 
   function initMessageBoard() {
     messageBoard.initMessages(
-      ["Welcome! The AI wants to have a card battle! ", "Best of three!"].map(
+      ["Welcome! The AI wants to have a card battle! Best of three!"].map(
         messageBoard.createMessage
       )
     );
@@ -325,7 +352,7 @@
       <span slot="level"> 1 </span>
       <span slot="win"> 0 </span>
       <span slot="lose"> 0 </span>
-      <span slot="cards"> 5 </span>
+      <span slot="rank"> 999+ </span>
     </Player>
     <WinballBoard balls={playerBalls} bind:this={playerWinballBoard} />
     <BattleBoard points={playerPoint} battlecard={playerBattleCard} />
@@ -347,7 +374,7 @@
       <span slot="level"> 99 </span>
       <span slot="win"> 999 </span>
       <span slot="lose"> Never </span>
-      <span slot="cards"> Infinite </span>
+      <span slot="rank"> 1 </span>
     </Player>
   </div>
   <div class="messageBox">

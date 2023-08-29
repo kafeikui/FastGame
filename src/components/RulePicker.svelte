@@ -80,7 +80,7 @@
     padding-bottom: 50px;
     box-sizing: border-box;
     position: absolute;
-    top: 30vh;
+    top: 10vh;
     left: 35vw;
     z-index: 1000;
   }
