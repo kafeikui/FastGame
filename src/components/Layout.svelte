@@ -76,7 +76,7 @@
     await getRandom();
     const wait = (timeout) => new Promise((res) => setTimeout(res, timeout));
     while (getLastRandomness() === undefined) {
-      await wait(1000);
+      await wait(500);
     }
   }
 

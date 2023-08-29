@@ -1,5 +1,5 @@
 {
   "websocketProvider": "ws://127.0.0.1:9546",
   "account": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-  "contractAddress": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318"
+  "contractAddress": "0x36b58F5C1969B7b6591D752ea6F5486D069010AB"
 }
