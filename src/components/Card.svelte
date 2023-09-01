@@ -3,11 +3,12 @@
 
   let pookers = [];
   let num = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
-  let shape = ["黑桃", "红桃", "梅花", "方块"];
+  let shape = ["spade", "heart", "club", "diamond"];
   for (let i = 0; i < shape.length; i++) {
     for (let j = 0; j < num.length; j++) {
       let pooker = {
         name: shape[i] + num[j],
+        code: 13 * i + j,
         xPos: -133 * j,
         yPos: -189 * i,
         type: i,
@@ -18,13 +19,13 @@
     }
   }
   // let sKing = {
-  // 	name: "小王",
+  // 	name: "black joker",
   // 	xPos: -133 * 0,
   // 	yPos: -189 * 4,
   // 	value: 14,
   // };
   // let bKing = {
-  // 	name: "大王",
+  // 	name: "colored joker",
   // 	xPos: -133 * 1,
   // 	yPos: -189 * 4,
   // 	value: 15,
@@ -87,17 +88,21 @@
     return [duck[ranIdx], ranIdx];
   }
   export const bgPooker = {
-    name: "背景",
+    name: "card back",
     xPos: -133 * 2,
     yPos: -189 * 4,
   };
+
+  export function getCardByCode(code) {
+    return { ...pookers[code] };
+  }
 </script>
 
 <script>
   import { createEventDispatcher } from "svelte";
   import { afterUpdate } from "svelte";
   import { spring } from "svelte/motion";
-  import { pannable } from "./pannable.js";
+  import { pannable } from "../utils/pannable.js";
 
   // pan
   const coords = spring(
@@ -137,6 +142,9 @@
   const dispatch = createEventDispatcher();
 
   function play() {
+    if (vague) {
+      return;
+    }
     dispatch("click", {
       wantCard: wantCard,
       index: index,
@@ -223,5 +231,6 @@
     width: 133px;
     height: 189px;
     background-image: url(/images/pkr.jpg);
+    pointer-events: auto;
   }
 </style>

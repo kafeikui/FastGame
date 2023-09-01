@@ -39,7 +39,7 @@
     border-top: 1px solid #eee;
     margin: 0 0 1em 0;
     overflow-y: auto;
-    user-select: none;
+    user-select: text;
   }
   article {
     height: 26px;

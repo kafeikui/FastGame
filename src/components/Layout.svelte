@@ -5,8 +5,7 @@
   import BattleBoard from "./BattleBoard.svelte";
   import WinballBoard from "./WinballBoard.svelte";
   import Card, {
-    getRandomDuckOnChain,
-    getRndomCardFromDuck,
+    getCardByCode,
     clearCardPlayFlag,
     bgPooker,
   } from "./Card.svelte";
@@ -15,44 +14,90 @@
   import { onMount } from "svelte";
   import RuleBoard from "./RuleBoard.svelte";
   import RulePicker, { buildRuleDesc } from "./RulePicker.svelte";
-  import {
-    initListeners,
-    clearLastRandomness,
-    getRandom,
-    getLastRandomness,
-  } from "./RandomGenerator.svelte";
+  import TablePicker from "./TablePicker.svelte";
   import configJSON from "../utils/web3/const/GameConfig.json";
-  let playerHand, AIHand;
-  let playerDuckData;
-  let AIDuckData;
+  import CardPool from "./CardPool.svelte";
+  import {
+    createTable,
+    getRandomSeed,
+    joinTable,
+    listenCardPoolGenerated,
+    listenTableCreated,
+    listenTableJoined,
+    commitHands,
+    listenHandsCommitted,
+    commit,
+    playCard,
+    listenCardCommitted,
+    listenCardPlayed,
+    listenRoundEnded,
+    listenSetEnded,
+    getPlayers,
+    sendETH,
+    listenRuleTypeDetermined,
+  } from "../utils/web3";
+  let playerHand, opponentHand;
   let playerDuck = [],
-    AIDuck = [];
+    opponentDuck = [];
   let oPlayerDucks = [],
-    oAIDucks = [];
-  let playerBattleCard, AIBattleCard;
-  let playerWinballBoard, AIWinballBoard;
+    oOpponentDucks = [];
+  let playerBattleCard, opponentBattleCard;
+  let playerWinballBoard, opponentWinballBoard;
   let playerBalls = [];
-  let AIBalls = [];
-  let roundCount;
-  let playerPoint, AIPoint;
-  let roleToPickRule;
+  let opponentBalls = [];
+  let playerPoint, opponentPoint;
   let playButton;
   let focusCard, focusIndex;
   let messageBoard;
-  let canNext;
   let ruleMode = { role: -1, mode: -1 };
   let oHidden;
   let onRulePick;
+  let onTablePick;
+  let onCardPoolPick;
+  let web3;
+  let contractAddress = configJSON.contractAddress;
+  let myName = "Card Beginner";
+  let opponentName = "Card Sensei";
+  let opponent;
+  let tableId;
+  let cardPool = [];
+  let playerCommitedHands;
+  let opponentCommitedHands;
+  let roundPlayed;
+  let playerCommited;
+  let opponentCommited;
+  let playerPickRule;
+  let canRestart;
+  let BN;
 
-  onMount(() => {
-    setTimeout(() => {
-      let web3 = new Web3(
-        new Web3.providers.WebsocketProvider(configJSON.websocketProvider)
-      );
-      web3.eth.accounts.wallet.add(configJSON.account);
-      initListeners(web3, configJSON.contractAddress);
-      init();
-    }, 100);
+  onMount(async () => {
+    oHidden.style.display = "block";
+    web3 = new Web3(
+      new Web3.providers.WebsocketProvider(configJSON.websocketProvider)
+    );
+
+    BN = web3.utils.BN;
+    // TODO we create a new keypair for demo use
+    web3.eth.accounts.wallet.create(1);
+    for (var i = 0; i < 20; i++) {
+      try {
+        let index = Math.floor(Math.random() * configJSON.devAccounts.length);
+        let account = web3.eth.accounts.wallet.add(
+          configJSON.devAccounts[index]
+        );
+        await sendETH(
+          web3,
+          account.address,
+          web3.eth.accounts.wallet[0].address,
+          configJSON.demoETHValue
+        );
+        break;
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    init();
+    startTablePick();
   });
 
   async function init() {
@@ -60,37 +105,293 @@
       { id: "0", win: false },
       { id: "1", win: false },
     ];
-    AIBalls = [
+    opponentBalls = [
       { id: "0", win: false },
       { id: "1", win: false },
     ];
-    // AI picks the rule at first
-    roleToPickRule = 1;
+    // A randomness will decide the card pool and the rule for the first set
     initMessageBoard();
+    myName =
+      web3.eth.accounts.wallet[0].address.slice(0, 4) +
+      "..." +
+      web3.eth.accounts.wallet[0].address.slice(-4);
 
-    nextGame();
+    listenTableCreated(
+      web3,
+      contractAddress,
+      handleTableCreated,
+      web3.eth.accounts.wallet[0].address
+    );
   }
 
-  async function requestSeed() {
-    clearLastRandomness();
-    await getRandom();
-    const wait = (timeout) => new Promise((res) => setTimeout(res, timeout));
-    while (getLastRandomness() === undefined) {
-      await wait(500);
+  async function initGame(_opponent) {
+    opponent = _opponent;
+    // check length of the opponent address
+    if (opponent.length > 8) {
+      opponentName = opponent.slice(0, 4) + "..." + opponent.slice(-4);
+    }
+    initGameListeners();
+    await nextSet();
+  }
+
+  function initGameListeners() {
+    listenCardPoolGenerated(
+      web3,
+      contractAddress,
+      handleCardPoolGenerated,
+      tableId
+    );
+    listenHandsCommitted(
+      web3,
+      contractAddress,
+      handleHandsCommitted,
+      tableId,
+      opponent
+    );
+    listenCardCommitted(
+      web3,
+      contractAddress,
+      handleCardCommitted,
+      tableId,
+      opponent
+    );
+    listenCardPlayed(
+      web3,
+      contractAddress,
+      handleCardPlayed,
+      tableId,
+      opponent
+    );
+    listenRoundEnded(web3, contractAddress, handleRoundEnded, tableId);
+    listenSetEnded(web3, contractAddress, handleSetEnded, tableId);
+    listenRuleTypeDetermined(
+      web3,
+      contractAddress,
+      handleRuleTypeDetermined,
+      tableId
+    );
+  }
+
+  async function onCreateTable() {
+    closeTablePick();
+    newMessage("Creating table...");
+    await createTable(web3, contractAddress);
+  }
+
+  async function onJoinTable(event) {
+    closeTablePick();
+    tableId = new BN(event.detail.tableId);
+    let players = await getPlayers(web3, contractAddress, tableId);
+    newMessage(` ${players[0]} has created the table, id: ${tableId}`);
+    newMessage("Joining table...");
+    await joinTable(web3, contractAddress, tableId);
+    newMessage("You have joined the table, id: " + tableId);
+    initGame(players[0]);
+  }
+
+  async function onCardPoolConfirm(event) {
+    let confirmedHands = event.detail.confirmedHands;
+    closeCardPoolPick(confirmedHands);
+    let hands = [];
+    for (let i = 0; i < 5; i++) {
+      if (i == 0 || i == 1) {
+        hands.push(web3.utils.sha3(confirmedHands[i].code.toString()));
+      } else {
+        hands.push(confirmedHands[i].code.toString());
+      }
+    }
+    playerDuck = confirmedHands;
+    newMessage("Sending your hands commitment to the chain...");
+    await commitHands(web3, contractAddress, tableId, hands);
+    playerCommitedHands = true;
+
+    if (opponentCommitedHands) {
+      newMessage("The first round starts. Please pick a card to play.");
+    }
+
+    if (playerPickRule) {
+      playerPickRule = false;
+      startRulePick();
     }
   }
 
-  async function nextGame() {
+  function onChooseRulePick(event) {
+    closeRulePick();
+  }
+
+  function handleTableCreated(event) {
+    newMessage("You have created the table, id: " + event.returnValues.tableId);
+    tableId = new BN(event.returnValues.tableId);
+    listenTableJoined(
+      web3,
+      contractAddress,
+      handleTableJoined,
+      event.returnValues.tableId
+    );
+  }
+
+  async function handleTableJoined(event) {
+    newMessage(
+      `${event.returnValues.player} has joined the table, id: ${event.returnValues.tableId}`
+    );
+    initGame(event.returnValues.player);
+  }
+
+  function handleCardPoolGenerated(event) {
+    newMessage("Card pool generated, please select your hands.");
+    cardPool = [];
+    event.returnValues.cardPool.forEach((card) => {
+      cardPool.push(getCardByCode(card));
+    });
+    newMessage("Start in 1 seconds...");
+    setTimeout(() => {
+      startCardPoolPick();
+    }, 1000);
+  }
+
+  function handleRuleTypeDetermined(event) {
+    if (event.returnValues.player.toLowerCase() == opponent.toLowerCase()) {
+      updateRuleMode(2, event.returnValues.ruleType);
+    } else if (
+      event.returnValues.player.toLowerCase() ==
+      web3.eth.accounts.wallet[0].address.toLowerCase()
+    ) {
+      updateRuleMode(1, event.returnValues.ruleType);
+    } else {
+      updateRuleMode(0, event.returnValues.ruleType);
+    }
+  }
+
+  function handleHandsCommitted(event) {
+    newMessage("Your opponent has committed the hands.");
+    let hands = event.returnValues.hands;
+    console.log(hands);
+    opponentDuck = [
+      bgPooker,
+      bgPooker,
+      getCardByCode(Number(hands[2])),
+      getCardByCode(Number(hands[3])),
+      getCardByCode(Number(hands[4])),
+    ];
+    opponentCommitedHands = true;
+    if (playerCommitedHands) {
+      newMessage("The first round starts. Please pick a card to play.");
+    }
+  }
+
+  async function handleCardCommitted(event) {
+    newMessage("Your opponent has committed the card.");
+    opponentBattleCard = { ...bgPooker };
+
+    opponentCommited = true;
+    if (playerCommited) {
+      playerCommited = false;
+      opponentCommited = false;
+      newMessage("Sending the original card...");
+      await playCard(
+        web3,
+        contractAddress,
+        tableId,
+        focusIndex,
+        focusCard.code.toString()
+      );
+    }
+  }
+
+  function handleCardPlayed(event) {
+    newMessage("Your opponent has played the card.");
+    let card = getCardByCode(Number(event.returnValues.card));
+    opponentBattleCard = { ...card };
+    // show hide cards
+    if (event.returnValues.index < 2) {
+      opponentDuck[event.returnValues.index] = card;
+    }
+    // change opacity
+    oOpponentDucks[event.returnValues.index].vague = true;
+  }
+
+  function handleRoundEnded(event) {
+    let endRound = Number(event.returnValues.round);
+    newMessage(`Round ${endRound} ended.`);
+    let winner = event.returnValues.winner;
+    console.log(winner);
+    if (web3.utils.toBN(winner).isZero()) {
+      newMessage(`Wow draw round!`);
+    } else {
+      if (winner.toLowerCase() == opponent.toLowerCase()) {
+        opponentPoint += Number(event.returnValues.points);
+      } else {
+        playerPoint += Number(event.returnValues.points);
+      }
+      newMessage(`Winner: ${winner} with points: ${event.returnValues.points}`);
+    }
+    if (endRound < 5) {
+      newMessage(`Next round starts in 1 seconds.`);
+      setTimeout(() => {
+        playerBattleCard = undefined;
+        opponentBattleCard = undefined;
+        roundPlayed = false;
+        newMessage(`Round ${endRound + 1} starts. Please pick a card to play.`);
+      }, 1000);
+    }
+  }
+
+  async function handleSetEnded(event) {
+    let endSet = Number(event.returnValues.set);
+    newMessage(`Set ${endSet} ended.`);
+    let winner = event.returnValues.winner;
+    if (web3.utils.toBN(winner).isZero()) {
+      newMessage(
+        `Wow draw set, a randomness will determine the card pool for next set!`
+      );
+      setTimeout(async () => {
+        newMessage(`Next set starts in 2 seconds`);
+        await nextSet();
+      }, 2000);
+    } else if (winner.toLowerCase() == opponent.toLowerCase()) {
+      if (opponentBalls[0].win) {
+        opponentBalls[1].win = true;
+        newMessage(
+          `Opponent won the game! Thanks for playing! ${printGameScores()}`
+        );
+        canRestart = true;
+      } else {
+        opponentBalls[0].win = true;
+        newMessage(`Opponent won the set! ${printGameScores()}`);
+        newMessage(`As a compensation, you will pick the rule for next set!`);
+        playerPickRule = true;
+        setTimeout(async () => {
+          newMessage(`Next set starts in 2 seconds`);
+          await nextSet();
+        }, 2000);
+      }
+    } else {
+      if (playerBalls[0].win) {
+        playerBalls[1].win = true;
+        newMessage(
+          `You won the game! Thanks for playing! ${printGameScores()}`
+        );
+        canRestart = true;
+      } else {
+        playerBalls[0].win = true;
+        newMessage(`You won the set! ${printGameScores()}`);
+        setTimeout(async () => {
+          newMessage(`Next set starts in 2 seconds`);
+          await nextSet();
+        }, 2000);
+      }
+    }
+  }
+
+  async function nextSet() {
     clearCardPlayFlag();
-    (playerDuck = []), (AIDuck = []);
+    (playerDuck = []), (opponentDuck = []);
     ruleMode = { role: -1, mode: -1 };
     playButton = false;
-    canNext = false;
     playerBattleCard = undefined;
-    AIBattleCard = undefined;
-    roundCount = 0;
+    opponentBattleCard = undefined;
     playerPoint = 0;
-    AIPoint = 0;
+    opponentPoint = 0;
     oPlayerDucks = [
       { picked: false, vague: false },
       { picked: false, vague: false },
@@ -98,44 +399,20 @@
       { picked: false, vague: false },
       { picked: false, vague: false },
     ];
-    oAIDucks = [
+    oOpponentDucks = [
       { vague: false },
       { vague: false },
       { vague: false },
       { vague: false },
       { vague: false },
     ];
+    cardPool = [];
+    playerCommitedHands = false;
+    opponentCommitedHands = false;
+    roundPlayed = false;
+
     newMessage("Requesting randomness...");
-    await requestSeed();
-    // actually player and AI can't chooose the same card
-    playerDuckData = getRandomDuckOnChain(getLastRandomness(), 5, 2);
-    AIDuckData = getRandomDuckOnChain(getLastRandomness(), 5, 2);
-    clearCardPlayFlag();
-    playerDuck = playerDuckData.slice(0);
-    AIDuck = [bgPooker, bgPooker, AIDuckData[2], AIDuckData[3], AIDuckData[4]];
-
-    // the one who loses last game will pick the rule
-    if (roleToPickRule === 1) {
-      AIRollRuleMode();
-    } else {
-      startRulePick();
-    }
-
-    // another solution:
-    // if AI falls behind, AI roll the rule in next game
-    // if (AIWinballBoard.winPoint() <= playerWinballBoard.winPoint()) {
-    //   AIRollRuleMode();
-    // } else {
-    //   startRulePick();
-    // }
-  }
-
-  function handleRulePick(event) {
-    let mode = event.detail.mode;
-    ruleMode = buildRuleMode(0, mode);
-    newMessage("The Player picks rule " + buildRuleDesc(mode));
-    oHidden.style.display = "none";
-    onRulePick = false;
+    await getRandomSeed(web3, contractAddress, tableId);
   }
 
   function startRulePick() {
@@ -143,18 +420,45 @@
     onRulePick = true;
   }
 
+  function startTablePick() {
+    oHidden.style.display = "block";
+    onTablePick = true;
+  }
+
+  function startCardPoolPick() {
+    oHidden.style.display = "block";
+    onCardPoolPick = true;
+  }
+
+  function closeRulePick() {
+    oHidden.style.display = "none";
+    onRulePick = false;
+  }
+
+  function closeTablePick() {
+    oHidden.style.display = "none";
+    onTablePick = false;
+  }
+
+  function closeCardPoolPick() {
+    oHidden.style.display = "none";
+    onCardPoolPick = false;
+  }
+
   function initMessageBoard() {
     messageBoard.initMessages(
-      ["Welcome! The AI wants to have a card battle! Best of three!"].map(
+      ["Welcome! Let's have a card battle! Best of three!"].map(
         messageBoard.createMessage
       )
     );
   }
 
   function focus(event) {
-    let playerCard = event.detail.wantCard;
-    let index = event.detail.index;
-    foucsOnCardFromHand(playerCard, index);
+    if (playerCommitedHands && opponentCommitedHands && !roundPlayed) {
+      let playerCard = event.detail.wantCard;
+      let index = event.detail.index;
+      foucsOnCardFromHand(playerCard, index);
+    }
   }
 
   function foucsOnCardFromHand(playerCard, index) {
@@ -167,106 +471,50 @@
       oPlayerDucks[pickedIndex].picked = false;
     }
     if (pickedIndex === index) {
-      restoreControlPanel();
+      restorePlayButton();
     } else {
-      setControlPanel(playerCard, index);
+      setFocusCard(playerCard, index);
+      enablePlayButton();
     }
   }
 
-  function play() {
+  async function onPlay() {
+    roundPlayed = true;
     focusCard.chosen = true;
-    // draw a card from AI duck
-    let [AICard, AICardIndex] = getRndomCardFromDuck(AIDuckData);
-    // render
-    // put in battleboard
-    playerBattleCard = focusCard;
-    AIBattleCard = AICard;
-    // show hide cards
-    if (AICardIndex < 2) {
-      AIDuck[AICardIndex] = AIDuckData[AICardIndex];
-    }
-    // change opacity in both hand
+    playerBattleCard = { ...focusCard };
     oPlayerDucks[focusIndex].vague = true;
-    oAIDucks[AICardIndex].vague = true;
-    // compare and show result, change point
-    let res;
-    // this score rule are decided by ruleMode
-    if (ruleMode.mode === 1) {
-      if (focusCard.type === AICard.type) {
-        res = focusCard.points - AICard.points;
-      } else {
-        res = AICard.points - focusCard.points;
-      }
-    } else {
-      if (focusCard.type === AICard.type) {
-        res = AICard.points - focusCard.points;
-      } else {
-        res = focusCard.points - AICard.points;
-      }
-    }
+    unpickDuck(oPlayerDucks);
+    restorePlayButton();
 
-    // when draw, the one who decided the rule wins and gets 1 point
-    if (res > 0) {
-      playerPoint += res;
-      newMessage("Player won this round! (points: " + res + ")");
-    } else if (res < 0) {
-      AIPoint -= res;
-      newMessage("AI won this round! (points: " + -res + ")");
-    } else {
-      let role = ruleMode.role;
-      if (role === 0) {
-        playerPoint++;
-      } else if (role === 1) {
-        AIPoint++;
-      }
-      newMessage(
-        "Wow draw round! The one who picks the rule will get 1 point!"
+    newMessage("Sending the commitment of the card...");
+    await commit(
+      web3,
+      contractAddress,
+      tableId,
+      web3.utils.sha3(focusCard.code.toString())
+    );
+    playerCommited = true;
+    if (opponentCommited) {
+      opponentCommited = false;
+      playerCommited = false;
+      newMessage("Sending the original card...");
+      await playCard(
+        web3,
+        contractAddress,
+        tableId,
+        focusIndex,
+        focusCard.code.toString()
       );
     }
-    roundCount++;
-    unpickDuck(oPlayerDucks);
-    restoreControlPanel();
-    checkGame();
   }
 
-  function checkGame() {
-    if (roundCount === 5) {
-      if (playerPoint > AIPoint) {
-        roleToPickRule = 1;
-        if (playerBalls[0].win) {
-          playerBalls[1].win = true;
-          newMessage("Player won! Thanks for playing! " + printGameScores());
-        } else {
-          playerBalls[0].win = true;
-          newMessage("Player won the game! " + printGameScores());
-          canNext = true;
-        }
-      } else if (playerPoint < AIPoint) {
-        roleToPickRule = 0;
-        if (AIBalls[0].win) {
-          AIBalls[1].win = true;
-          newMessage("AI won! Thanks for playing! " + printGameScores());
-        } else {
-          AIBalls[0].win = true;
-          newMessage("AI won the game! " + printGameScores());
-          canNext = true;
-        }
-      } else {
-        roleToPickRule = 1;
-        newMessage(
-          "Draw this round! Let's continue! AI will pick the rule!" +
-            printGameScores()
-        );
-        canNext = true;
-      }
-    }
-  }
-
-  function onNextGame() {
-    nextGame();
+  async function onNextGame() {
+    await nextSet();
   }
 
   function onRestart() {
+    web3.eth.clearSubscriptions();
+    canRestart = false;
     init();
   }
 
@@ -276,14 +524,17 @@
     }
   }
 
-  function restoreControlPanel() {
+  function restorePlayButton() {
     playButton = false;
-    focusCard = undefined;
-    focusIndex = -1;
+    // focusCard = undefined;
+    // focusIndex = -1;
   }
 
-  function setControlPanel(_focusCard, _focusIndex) {
+  function enablePlayButton() {
     playButton = true;
+  }
+
+  function setFocusCard(_focusCard, _focusIndex) {
     focusCard = _focusCard;
     focusIndex = _focusIndex;
   }
@@ -306,23 +557,36 @@
       "(" +
       playerWinballBoard.printScore() +
       ":" +
-      AIWinballBoard.printScore() +
+      opponentWinballBoard.printScore() +
       ")"
     );
   }
 
-  function AIRollRuleMode() {
-    let mode = Math.ceil(Math.random() * 2);
-    ruleMode = buildRuleMode(1, mode);
-    newMessage("The AI picks " + buildRuleDesc(mode));
+  function updateRuleMode(role, mode) {
+    ruleMode.role = role;
+    ruleMode.mode = Number(mode);
+    newMessage(
+      `The current set uses ${buildRuleDesc(Number(mode))} by ${formatRuleRole(
+        role
+      )}.`
+    );
   }
 
-  // role: 0-player 1-AI
-  function buildRuleMode(_role, _mode) {
-    return { role: _role, mode: _mode };
+  // role: -1-TBD 0-Randomness 1-You 2-Opponent
+  function formatRuleRole(role) {
+    switch (role) {
+      case -1:
+        return "TBD";
+      case 0:
+        return "Randomness";
+      case 1:
+        return "You";
+      case 2:
+        return "Opponent";
+    }
   }
 
-  let panEndHandler = function (wantCard, index, x, y) {
+  function panEndHandler(wantCard, index, x, y) {
     // decide if this is a valid pan
     // if (x > 300 && x < 550 && y > 100 && y < 300) {
     if (y > 100 && y < 300) {
@@ -331,10 +595,10 @@
         foucsOnCardFromHand(wantCard, index);
       }
       // take this as play that card
-      play();
+      onPlay();
     }
     return [-1, -1];
-  };
+  }
 </script>
 
 <div class="bg">
@@ -348,7 +612,7 @@
         height="100"
         width="100"
       />
-      <span slot="name"> Card Beginner </span>
+      <span slot="name"> {myName} </span>
       <span slot="level"> 1 </span>
       <span slot="win"> 0 </span>
       <span slot="lose"> 0 </span>
@@ -358,19 +622,19 @@
     <BattleBoard points={playerPoint} battlecard={playerBattleCard} />
     <RuleBoard class="ruleBoard">
       <span slot="mode"> {ruleMode.mode} </span>
-      <span slot="role"> {ruleMode.role === 0 ? "Player" : "AI"} </span>
+      <span slot="role"> {formatRuleRole(ruleMode.role)} </span>
     </RuleBoard>
-    <BattleBoard points={AIPoint} battlecard={AIBattleCard} />
-    <WinballBoard balls={AIBalls} bind:this={AIWinballBoard} />
+    <BattleBoard points={opponentPoint} battlecard={opponentBattleCard} />
+    <WinballBoard balls={opponentBalls} bind:this={opponentWinballBoard} />
     <Player>
       <img
         slot="avatar"
-        src="/images/AI.jpg"
-        alt="AI"
+        src="/images/opponent.jpg"
+        alt="opponent"
         height="100"
         width="100"
       />
-      <span slot="name"> Card Sensei </span>
+      <span slot="name"> {opponentName} </span>
       <span slot="level"> 99 </span>
       <span slot="win"> 999 </span>
       <span slot="lose"> Never </span>
@@ -386,7 +650,7 @@
       {#each playerDuck as wantCard, i}
         <Card
           on:click={focus}
-          canPan="true"
+          canPan={playerCommitedHands && opponentCommitedHands && !roundPlayed}
           {panEndHandler}
           {wantCard}
           index={i}
@@ -396,20 +660,24 @@
       {/each}
     </Hand>
     <ControlPanel
-      on:play={play}
+      on:play={onPlay}
       on:next={onNextGame}
       on:restart={onRestart}
-      enablePlay={playButton}
-      enableNext={canNext}
+      enablePlay={playerCommitedHands &&
+        opponentCommitedHands &&
+        playButton &&
+        !roundPlayed}
+      enableNext={false}
+      enableRestart={canRestart}
     />
-    <Hand bind:this={AIHand}>
-      <span> AI </span>
-      {#each AIDuck as wantCard, i}
+    <Hand bind:this={opponentHand}>
+      <span> Opponent </span>
+      {#each opponentDuck as wantCard, i}
         <Card
           {wantCard}
           index={i}
-          vague={oAIDucks[i].vague}
-          picked={oAIDucks[i].picked}
+          vague={oOpponentDucks[i].vague}
+          picked={oOpponentDucks[i].picked}
         />
       {/each}
     </Hand>
@@ -417,7 +685,18 @@
   <footer />
 </div>
 <div class="hidden" bind:this={oHidden} />
-<RulePicker onPick={onRulePick} on:choose={handleRulePick} />
+<RulePicker onPick={onRulePick} on:choose={onChooseRulePick} />
+<TablePicker
+  onPick={onTablePick}
+  on:create={onCreateTable}
+  on:join={onJoinTable}
+/>
+<CardPool
+  remark={playerPickRule ? "Note: you can pick the rule for next set" : ""}
+  cardColumns={cardPool}
+  onPick={onCardPoolPick}
+  on:confirm={onCardPoolConfirm}
+/>
 
 <style>
   .bg {
