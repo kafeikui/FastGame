@@ -35,6 +35,7 @@
     getPlayers,
     sendETH,
     listenRuleTypeDetermined,
+    determineRuleType,
   } from "../utils/web3";
   let playerHand, opponentHand;
   let playerDuck = [],
@@ -215,8 +216,9 @@
     }
   }
 
-  function onChooseRulePick(event) {
+  async function onChooseRulePick(event) {
     closeRulePick();
+    await determineRuleType(web3, contractAddress, tableId, event.detail.mode);
   }
 
   function handleTableCreated(event) {
@@ -243,10 +245,10 @@
     event.returnValues.cardPool.forEach((card) => {
       cardPool.push(getCardByCode(card));
     });
-    newMessage("Start in 1 seconds...");
+    newMessage("Start in 5 seconds...");
     setTimeout(() => {
       startCardPoolPick();
-    }, 1000);
+    }, 5000);
   }
 
   function handleRuleTypeDetermined(event) {
@@ -326,13 +328,13 @@
       newMessage(`Winner: ${winner} with points: ${event.returnValues.points}`);
     }
     if (endRound < 5) {
-      newMessage(`Next round starts in 1 seconds.`);
+      newMessage(`Next round starts in 5 seconds.`);
       setTimeout(() => {
         playerBattleCard = undefined;
         opponentBattleCard = undefined;
         roundPlayed = false;
         newMessage(`Round ${endRound + 1} starts. Please pick a card to play.`);
-      }, 1000);
+      }, 5000);
     }
   }
 
