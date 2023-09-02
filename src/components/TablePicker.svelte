@@ -31,10 +31,12 @@
     <input class="tableIdInput" bind:value={tableId} />
     <button
       class="table"
-      on:click={(e) =>
+      on:click={(e) => {
         dispatch("join", {
           tableId,
-        })}>Join</button
+        });
+        tableId = "";
+      }}>Join</button
     >
   </div>
 </div>

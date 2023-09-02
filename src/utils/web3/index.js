@@ -1,6 +1,9 @@
 import contractJSON from "./const/CardGame.json";
 import Web3 from "web3";
 
+// ===============================
+// utils
+// ===============================
 export const getRandomIndex = (seed) => {
   var _seed = seed;
   return function (upperBound) {
@@ -10,6 +13,14 @@ export const getRandomIndex = (seed) => {
   };
 };
 
+export const getSalt = () => {
+  let web3 = new Web3();
+  web3.utils.sha3;
+  return web3.utils.randomHex(32);
+};
+// ===============================
+// transactions
+// ===============================
 export async function sendETH(web3, from, to, amount) {
   let gas_estimate = await web3.eth.estimateGas({
     from,
@@ -25,9 +36,6 @@ export async function sendETH(web3, from, to, amount) {
   });
 }
 
-// ===============================
-// transactions
-// ===============================
 // createTable()
 export const createTable = async (web3, contractAddress) => {
   if (web3) {
@@ -58,7 +66,7 @@ export const determineRuleType = async (
   }
 };
 
-// commitHands(uint256 tableId, string[] memory hands)
+// commitHands(uint256 tableId, uint256[] memory hands)
 export const commitHands = async (web3, contractAddress, tableId, hands) => {
   if (web3) {
     let instance = getContract(web3, contractAddress);
@@ -76,11 +84,19 @@ export const commit = async (web3, contractAddress, tableId, commitment) => {
   }
 };
 
-// play(uint256 tableId, uint256 index, string memory card)
-export const playCard = async (web3, contractAddress, tableId, index, card) => {
+// play(uint256 tableId, uint256 index, uint256 card, uint256 salt, uint256 hiddenSalt)
+export const playCard = async (
+  web3,
+  contractAddress,
+  tableId,
+  index,
+  card,
+  salt,
+  hiddenSalt
+) => {
   if (web3) {
     let instance = getContract(web3, contractAddress);
-    let method = instance.methods.play(tableId, index, card);
+    let method = instance.methods.play(tableId, index, card, salt, hiddenSalt);
     return sendTransaction(web3, method);
   }
 };
@@ -262,7 +278,7 @@ export const listenRuleTypeDetermined = (
       });
   }
 };
-//     event HandsCommitted(uint256 indexed tableId, address indexed player, string[] hands);
+//     event HandsCommitted(uint256 indexed tableId, address indexed player, uint256[] hands);
 export const listenHandsCommitted = (
   web3,
   contractAddress,
@@ -303,7 +319,7 @@ export const listenCardCommitted = (
   }
 };
 //     event CardPlayed(
-//         uint256 indexed tableId, address indexed player, uint256 set, uint256 round, uint256 index, string card
+//         uint256 indexed tableId, address indexed player, uint256 set, uint256 round, uint256 index, uint256 card
 //     );
 export const listenCardPlayed = (
   web3,
@@ -325,6 +341,9 @@ export const listenCardPlayed = (
   }
 };
 
+// ===============================
+// internals
+// ===============================
 function getContract(web3, contractAddress) {
   return new web3.eth.Contract(contractJSON.abi, contractAddress);
 }
@@ -332,16 +351,16 @@ function getContract(web3, contractAddress) {
 async function sendTransaction(web3, method) {
   let account = web3.eth.accounts.wallet[0].address;
   console.log(method._method.name);
-  // let gas_estimate = await method.estimateGas({ from: account });
-  // gas_estimate = Math.round(gas_estimate * 1.2);
+  let gas_estimate = await method.estimateGas({ from: account });
+  gas_estimate = Math.round(gas_estimate * 1.2);
 
   //   var gasprice = await web3.eth.getGasPrice();
   //  gasprice = Math.round(gasprice * 1.2);
+
   return method
     .send({
       from: account,
-      // gas: web3.utils.toHex(gas_estimate),
-      gas: 1000000,
+      gas: web3.utils.toHex(gas_estimate),
       //   web3.utils.toHex(gasprice),
     })
     .on("transactionHash", function (hash) {
@@ -355,14 +374,13 @@ async function sendTransaction(web3, method) {
         `Context changed, try for another time with the latest gas estimation. \n${error}`
       );
       // try for another time with gas estimation on that block number
-      // gas_estimate = await method.estimateGas({ from: account });
-      // gas_estimate = Math.round(gas_estimate * 1.2);
+      gas_estimate = await method.estimateGas({ from: account });
+      gas_estimate = Math.round(gas_estimate * 1.2);
 
       method
         .send({
           from: account,
-          // gas: web3.utils.toHex(gas_estimate),
-          gas: 1000000,
+          gas: web3.utils.toHex(gas_estimate),
           //   web3.utils.toHex(gasprice),
         })
         .on("transactionHash", function (hash) {

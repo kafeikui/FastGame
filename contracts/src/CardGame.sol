@@ -6,8 +6,6 @@ import {
     BasicRandcastConsumerBase
 } from "Randcast-User-Contract/user/GeneralRandcastConsumerBase.sol";
 import {shuffle} from "Randcast-User-Contract/user/RandcastSDK.sol";
-import {stringToUint} from "Randcast-User-Contract/utils/StringAndUintConverter.sol";
-import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 contract CardGame is GeneralRandcastConsumerBase {
     event RandomnessRequested(uint256 indexed tableId, bytes32 indexed requestId);
@@ -23,10 +21,10 @@ contract CardGame is GeneralRandcastConsumerBase {
     event TableJoined(uint256 indexed tableId, address indexed player);
     event GameEnded(uint256 indexed tableId, address indexed winner);
     event RuleTypeDetermined(uint256 indexed tableId, address indexed player, uint8 ruleType);
-    event HandsCommitted(uint256 indexed tableId, address indexed player, string[] hands);
-    event CardCommitted(uint256 indexed tableId, address indexed player, uint256 indexed round, string commitment);
+    event HandsCommitted(uint256 indexed tableId, address indexed player, uint256[] hands);
+    event CardCommitted(uint256 indexed tableId, address indexed player, uint256 indexed round, uint256 commitment);
     event CardPlayed(
-        uint256 indexed tableId, address indexed player, uint256 set, uint256 round, uint256 index, string card
+        uint256 indexed tableId, address indexed player, uint256 set, uint256 round, uint256 index, uint256 card
     );
 
     struct Table {
@@ -46,18 +44,18 @@ contract CardGame is GeneralRandcastConsumerBase {
     struct Player {
         address playerAddress;
         // 5 hands
-        string[] hands;
+        uint256[] hands;
         // 5 rounds
-        string[] playedCommitments;
+        uint256[] playedCommitments;
         // 5 rounds
-        string[] playedCards;
+        uint256[] playedCards;
         // 5 rounds
         uint256[] points;
         uint8 wonSets;
     }
 
-    mapping(bytes32 => uint256) tableIds;
-    mapping(uint256 => Table) tables;
+    mapping(bytes32 => uint256) public tableIds;
+    mapping(uint256 => Table) public tables;
 
     // solhint-disable-next-line no-empty-blocks
     constructor(address adapter) BasicRandcastConsumerBase(adapter) {}
@@ -76,8 +74,11 @@ contract CardGame is GeneralRandcastConsumerBase {
         tables[tableId].cardPool = new uint256[](0);
 
         tables[tableId].players.push(
-            Player(msg.sender, new string[](0), new string[](5), new string[](5), new uint256[](5), 0)
+            Player(msg.sender, new uint256[](0), new uint256[](5), new uint256[](5), new uint256[](5), 0)
         );
+        for (uint256 i = 0; i < 5; i++) {
+            tables[tableId].players[0].playedCards[i] = 52;
+        }
         emit TableCreated(tableId, msg.sender);
     }
 
@@ -85,8 +86,11 @@ contract CardGame is GeneralRandcastConsumerBase {
         require(tables[tableId].id != 0, "Table does not exist");
         require(tables[tableId].players.length < 2, "Table is full");
         tables[tableId].players.push(
-            Player(msg.sender, new string[](0), new string[](5), new string[](5), new uint256[](5), 0)
+            Player(msg.sender, new uint256[](0), new uint256[](5), new uint256[](5), new uint256[](5), 0)
         );
+        for (uint256 i = 0; i < 5; i++) {
+            tables[tableId].players[1].playedCards[i] = 52;
+        }
         emit TableJoined(tableId, msg.sender);
     }
 
@@ -109,8 +113,8 @@ contract CardGame is GeneralRandcastConsumerBase {
         emit RuleTypeDetermined(tableId, msg.sender, ruleType);
     }
 
-    // TODO check if hands are valid and in card pool
-    function commitHands(uint256 tableId, string[] memory hands) external notEnded(tableId) {
+    // Since there are two hidden cards, we will check if hands are in card pool when the player plays it
+    function commitHands(uint256 tableId, uint256[] memory hands) external notEnded(tableId) {
         require(tables[tableId].cardPool.length == 20, "Card pool is not generated");
         require(hands.length == 5, "Invalid hands");
         if (tables[tableId].players[0].playerAddress == msg.sender) {
@@ -125,7 +129,7 @@ contract CardGame is GeneralRandcastConsumerBase {
         emit HandsCommitted(tableId, msg.sender, hands);
     }
 
-    function commit(uint256 tableId, string memory commitment) external notEnded(tableId) {
+    function commit(uint256 tableId, uint256 commitment) external notEnded(tableId) {
         require(tables[tableId].id != 0, "Table does not exist");
         require(tables[tableId].cardPool.length == 20, "Card pool is not generated");
         require(tables[tableId].ruleType == 1 || tables[tableId].ruleType == 2, "Rule type not determined");
@@ -135,13 +139,13 @@ contract CardGame is GeneralRandcastConsumerBase {
         );
         if (tables[tableId].players[0].playerAddress == msg.sender) {
             require(
-                bytes(tables[tableId].players[0].playedCommitments[tables[tableId].currentRound]).length == 0,
+                tables[tableId].players[0].playedCommitments[tables[tableId].currentRound] == 0,
                 "Commitment already played"
             );
             tables[tableId].players[0].playedCommitments[tables[tableId].currentRound] = commitment;
         } else if (tables[tableId].players[1].playerAddress == msg.sender) {
             require(
-                bytes(tables[tableId].players[1].playedCommitments[tables[tableId].currentRound]).length == 0,
+                tables[tableId].players[1].playedCommitments[tables[tableId].currentRound] == 0,
                 "Commitment already played"
             );
             tables[tableId].players[1].playedCommitments[tables[tableId].currentRound] = commitment;
@@ -151,79 +155,35 @@ contract CardGame is GeneralRandcastConsumerBase {
         emit CardCommitted(tableId, msg.sender, tables[tableId].currentRound, commitment);
     }
 
-    function play(uint256 tableId, uint256 index, string memory card) external notEnded(tableId) {
+    function play(uint256 tableId, uint256 index, uint256 card, uint256 salt, uint256 hiddenSalt)
+        external
+        notEnded(tableId)
+    {
         require(tables[tableId].id != 0, "Table does not exist");
         require(tables[tableId].cardPool.length == 20, "Card pool is not generated");
         require(tables[tableId].ruleType == 1 || tables[tableId].ruleType == 2, "Rule type not determined");
         require(index < 5, "Invalid index");
 
-        uint8 currentSet = tables[tableId].currentSet;
-        uint8 currentRound = tables[tableId].currentRound;
-
         if (tables[tableId].players[0].playerAddress == msg.sender) {
-            require(tables[tableId].players[0].hands.length != 0, "Hands not committed");
-            require(bytes(tables[tableId].players[0].playedCards[currentRound]).length == 0, "Card already played");
-            require(
-                bytes(tables[tableId].players[0].playedCommitments[currentRound]).length != 0, "Commitment not played"
-            );
-            // check card with former commitment
-            require(
-                compareStrings(
-                    Strings.toHexString(uint256(keccak256(abi.encodePacked(card))), 32),
-                    tables[tableId].players[0].playedCommitments[currentRound]
-                ),
-                "Card does not match commitment"
-            );
-            tables[tableId].players[0].playedCards[currentRound] = card;
+            if (!_checkCard(tableId, 0, index, card, salt, hiddenSalt)) {
+                return;
+            }
+            tables[tableId].players[0].playedCards[tables[tableId].currentRound] = card;
         } else if (tables[tableId].players[1].playerAddress == msg.sender) {
-            require(tables[tableId].players[1].hands.length != 0, "Hands not committed");
-            require(bytes(tables[tableId].players[1].playedCards[currentRound]).length == 0, "Card already played");
-            require(
-                bytes(tables[tableId].players[1].playedCommitments[currentRound]).length != 0, "Commitment not played"
-            );
-            // check card with former commitment
-            require(
-                compareStrings(
-                    Strings.toHexString(uint256(keccak256(abi.encodePacked(card))), 32),
-                    tables[tableId].players[1].playedCommitments[currentRound]
-                ),
-                "Card does not match commitment"
-            );
-            tables[tableId].players[1].playedCards[currentRound] = card;
+            if (!_checkCard(tableId, 1, index, card, salt, hiddenSalt)) {
+                return;
+            }
+            tables[tableId].players[1].playedCards[tables[tableId].currentRound] = card;
         } else {
             revert("Not a player");
         }
-        emit CardPlayed(tableId, msg.sender, currentSet, currentRound, index, card);
+        emit CardPlayed(tableId, msg.sender, tables[tableId].currentSet, tables[tableId].currentRound, index, card);
 
         // calculate points and move round if all players have played
         if (
-            bytes(tables[tableId].players[0].playedCards[currentRound]).length != 0
-                && bytes(tables[tableId].players[1].playedCards[currentRound]).length != 0
-        ) {
-            (address roundWinner, uint256 wonPoints, bool cheatFound) =
-                calculatePoints(tableId, currentSet, currentRound);
-            if (cheatFound) {
-                return;
-            }
-
-            emit RoundEnded(tableId, currentSet, currentRound + 1, roundWinner, wonPoints);
-
-            if (currentRound == 4) {
-                determineSetWinner(tableId);
-                resetTable(tableId);
-                if (checkGameWinner(tableId) != address(0)) {
-                    // end game
-                    emit GameEnded(tableId, tables[tableId].winner);
-                    return;
-                }
-                // move set if all rounds have been played
-                emit SetEnded(tableId, currentSet + 1, tables[tableId].lastSetWinner);
-                tables[tableId].currentSet += 1;
-                tables[tableId].currentRound = 0;
-            } else {
-                tables[tableId].currentRound += 1;
-            }
-        }
+            tables[tableId].players[0].playedCards[tables[tableId].currentRound] != 52
+                && tables[tableId].players[1].playedCards[tables[tableId].currentRound] != 52
+        ) _proceedWithGame(tableId);
     }
 
     /**
@@ -244,58 +204,76 @@ contract CardGame is GeneralRandcastConsumerBase {
     // ===============================
     // internal functions
     // ===============================
-    function resetTable(uint256 tableId) internal {
+    function _resetTable(uint256 tableId) internal {
         tables[tableId].cardPool = new uint256[](0);
         tables[tableId].ruleType = 0;
         tables[tableId].randomnessState = 0;
-        tables[tableId].players[0].hands = new string[](0);
-        tables[tableId].players[0].playedCommitments = new string[](5);
-        tables[tableId].players[0].playedCards = new string[](5);
+        tables[tableId].players[0].hands = new uint256[](0);
+        tables[tableId].players[0].playedCommitments = new uint256[](5);
+        tables[tableId].players[0].playedCards = new uint256[](5);
+        for (uint256 i = 0; i < 5; i++) {
+            tables[tableId].players[0].playedCards[i] = 52;
+        }
         tables[tableId].players[0].points = new uint256[](5);
-        tables[tableId].players[1].hands = new string[](0);
-        tables[tableId].players[1].playedCommitments = new string[](5);
-        tables[tableId].players[1].playedCards = new string[](5);
+        tables[tableId].players[1].hands = new uint256[](0);
+        tables[tableId].players[1].playedCommitments = new uint256[](5);
+        tables[tableId].players[1].playedCards = new uint256[](5);
+        for (uint256 i = 0; i < 5; i++) {
+            tables[tableId].players[1].playedCards[i] = 52;
+        }
         tables[tableId].players[1].points = new uint256[](5);
     }
 
-    function checkCardInCardPool(uint256 tableId, uint256 cardInt) internal view returns (bool) {
+    function _checkCardInCardPool(uint256 tableId, uint256 card) internal view returns (bool) {
         require(tables[tableId].id != 0, "Table does not exist");
+        if (card > 51) {
+            return false;
+        }
         for (uint256 i = 0; i < tables[tableId].cardPool.length; i++) {
-            if (tables[tableId].cardPool[i] == cardInt) {
+            if (tables[tableId].cardPool[i] == card) {
                 return true;
             }
         }
         return false;
     }
 
-    // TODO support more padding characters
-    function trimCharacter(string memory card) internal pure returns (uint256) {
-        bytes memory cardBytes = bytes(card);
-        // trim last character if it's padding character
-        uint256 i = cardBytes.length - 1;
-        while (cardBytes[i] == bytes1("*")) {
-            i--;
-        }
-        // trim first character if it's padding character
-        uint256 j = 0;
-        while (cardBytes[j] == bytes1("*")) {
-            j++;
-        }
-
-        bytes memory trimmed = new bytes(i - j + 1);
-        for (uint256 k = 0; k < trimmed.length; k++) {
-            trimmed[k] = cardBytes[j + k];
-        }
-        return stringToUint(string(trimmed));
+    function _decodeSuitAndRank(uint256 card) internal pure returns (uint256, uint256) {
+        return (card / 13, card % 13);
     }
 
-    // TODO replace all padding characters and check if it's valid
-    function decodeSuitAndRank(uint256 cardInt) internal pure returns (uint256, uint256) {
-        return (cardInt / 13, cardInt % 13);
+    function _proceedWithGame(uint256 tableId) internal {
+        uint8 currentSet = tables[tableId].currentSet;
+        uint8 currentRound = tables[tableId].currentRound;
+
+        (address roundWinner, uint256 wonPoints) = _calculatePoints(
+            tableId,
+            currentRound,
+            tables[tableId].players[0].playedCards[currentRound],
+            tables[tableId].players[1].playedCards[currentRound]
+        );
+
+        emit RoundEnded(tableId, currentSet, currentRound + 1, roundWinner, wonPoints);
+
+        if (currentRound == 4) {
+            _determineSetWinner(tableId);
+            _resetTable(tableId);
+            emit SetEnded(tableId, currentSet + 1, tables[tableId].lastSetWinner);
+
+            if (_checkGameWinner(tableId) != address(0)) {
+                // end game
+                emit GameEnded(tableId, tables[tableId].winner);
+                return;
+            }
+
+            // move set if all rounds have been played
+            tables[tableId].currentSet += 1;
+            tables[tableId].currentRound = 0;
+        } else {
+            tables[tableId].currentRound += 1;
+        }
     }
 
-    // TODO check if playedCards are in hands, or it's cheating
-    function determineSetWinner(uint256 tableId) internal {
+    function _determineSetWinner(uint256 tableId) internal {
         require(tables[tableId].id != 0, "Table does not exist");
         uint256 player0Points = 0;
         uint256 player1Points = 0;
@@ -312,7 +290,7 @@ contract CardGame is GeneralRandcastConsumerBase {
         }
     }
 
-    function checkGameWinner(uint256 tableId) internal returns (address) {
+    function _checkGameWinner(uint256 tableId) internal returns (address) {
         require(tables[tableId].id != 0, "Table does not exist");
         if (tables[tableId].players[0].wonSets == 2) {
             tables[tableId].winner = tables[tableId].players[0].playerAddress;
@@ -322,25 +300,67 @@ contract CardGame is GeneralRandcastConsumerBase {
         return tables[tableId].winner;
     }
 
-    function calculatePoints(uint256 tableId, uint8 currentSet, uint8 currentRound)
-        internal
-        returns (address roundWinner, uint256 wonPoints, bool cheatFound)
-    {
-        uint256 player0CardInt = trimCharacter(tables[tableId].players[0].playedCards[currentRound]);
-        if (!checkCardInCardPool(tableId, player0CardInt)) {
-            emit CheatDetected(tableId, tables[tableId].players[0].playerAddress, currentSet, currentRound);
-            tables[tableId].winner = tables[tableId].players[1].playerAddress;
-            return (roundWinner, wonPoints, true);
-        }
-        (uint256 player0Suit, uint256 player0Rank) = decodeSuitAndRank(player0CardInt);
+    //TODO emit more specific cheat reason
+    function _checkCard(
+        uint256 tableId,
+        uint256 playerIndex,
+        uint256 index,
+        uint256 card,
+        uint256 salt,
+        uint256 hiddenSalt
+    ) internal returns (bool) {
+        uint8 currentSet = tables[tableId].currentSet;
+        uint8 currentRound = tables[tableId].currentRound;
 
-        uint256 player1CardInt = trimCharacter(tables[tableId].players[1].playedCards[currentRound]);
-        if (!checkCardInCardPool(tableId, player1CardInt)) {
-            emit CheatDetected(tableId, tables[tableId].players[1].playerAddress, currentSet, currentRound);
-            tables[tableId].winner = tables[tableId].players[0].playerAddress;
-            return (roundWinner, wonPoints, true);
+        require(tables[tableId].players[playerIndex].hands.length != 0, "Hands not committed");
+        require(tables[tableId].players[playerIndex].playedCards[currentRound] == 52, "Card already played");
+        require(tables[tableId].players[playerIndex].playedCommitments[currentRound] != 0, "Commitment not played");
+        // check card with former commitment
+        require(
+            tables[tableId].players[playerIndex].playedCommitments[currentRound]
+                == uint256(keccak256(abi.encodePacked(card, salt))),
+            "Card does not match commitment"
+        );
+
+        if (!_checkCardInCardPool(tableId, card)) {
+            emit CheatDetected(tableId, tables[tableId].players[playerIndex].playerAddress, currentSet, currentRound);
+            tables[tableId].winner = tables[tableId].players[1 - playerIndex].playerAddress;
+            return false;
         }
-        (uint256 player1Suit, uint256 player1Rank) = decodeSuitAndRank(player1CardInt);
+
+        if (index == 0 || index == 1) {
+            // check if the card matches hidden card from former commited hands
+            if (
+                tables[tableId].players[playerIndex].hands[index]
+                    != uint256(keccak256(abi.encodePacked(card, hiddenSalt)))
+            ) {
+                emit CheatDetected(
+                    tableId, tables[tableId].players[playerIndex].playerAddress, currentSet, currentRound
+                );
+                tables[tableId].winner = tables[tableId].players[1 - playerIndex].playerAddress;
+                return false;
+            }
+        } else {
+            // check if card is in hand with index
+            if (tables[tableId].players[playerIndex].hands[index] != card) {
+                emit CheatDetected(
+                    tableId, tables[tableId].players[playerIndex].playerAddress, currentSet, currentRound
+                );
+                tables[tableId].winner = tables[tableId].players[1 - playerIndex].playerAddress;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    function _calculatePoints(uint256 tableId, uint8 currentRound, uint256 player0Card, uint256 player1Card)
+        internal
+        returns (address roundWinner, uint256 wonPoints)
+    {
+        (uint256 player0Suit, uint256 player0Rank) = _decodeSuitAndRank(player0Card);
+
+        (uint256 player1Suit, uint256 player1Rank) = _decodeSuitAndRank(player1Card);
 
         if (tables[tableId].ruleType == 1) {
             if (player0Suit == player1Suit) {
@@ -426,10 +446,6 @@ contract CardGame is GeneralRandcastConsumerBase {
         emit CardPoolGenerated(tableId, requestId, cardPool, tables[tableId].ruleType, randomness);
     }
 
-    function compareStrings(string memory a, string memory b) internal pure returns (bool) {
-        return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
-    }
-
     // ===============================
     // views
     // ===============================
@@ -450,7 +466,7 @@ contract CardGame is GeneralRandcastConsumerBase {
         return tables[tableId].cardPool;
     }
 
-    function getHands(uint256 tableId, address player) external view returns (string[] memory) {
+    function getHands(uint256 tableId, address player) external view returns (uint256[] memory) {
         require(tables[tableId].id != 0, "Table does not exist");
         if (tables[tableId].players[0].playerAddress == player) {
             return tables[tableId].players[0].hands;
@@ -462,6 +478,6 @@ contract CardGame is GeneralRandcastConsumerBase {
     }
 
     function getCurrentState(uint256 tableId) external view returns (uint256, uint256) {
-        return (tables[tableId].currentSet, tables[tableId].currentRound);
+        return (tables[tableId].currentSet + 1, tables[tableId].currentRound + 1);
     }
 }

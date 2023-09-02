@@ -102,7 +102,7 @@
   import { createEventDispatcher } from "svelte";
   import { afterUpdate } from "svelte";
   import { spring } from "svelte/motion";
-  import { pannable } from "../utils/pannable.js";
+  import { pannable } from "../utils/pannable";
 
   // pan
   const coords = spring(
@@ -142,7 +142,7 @@
   const dispatch = createEventDispatcher();
 
   function play() {
-    if (vague) {
+    if (forbidClickIfVague && vague) {
       return;
     }
     dispatch("click", {
@@ -156,6 +156,9 @@
   export let vague = false;
   export let picked = false;
   export let canPan = false;
+  export let spacing = 50;
+  export let offset = 50;
+  export let forbidClickIfVague = true;
   export let panStartHandler = () => {}; // param wantCard, index  --do something when pan start
   export let panEndHandler = () => [-1, -1]; // param wantCard, index, x, y return [targetX,targetY] --handle just finished pan action
 
@@ -165,10 +168,10 @@
   afterUpdate(() => {
     card.style.backgroundPosition =
       wantCard.xPos + "px " + wantCard.yPos + "px";
-    card.style.left = 50 + index * 50 + "px";
+    card.style.left = offset + index * spacing + "px";
     card.style["z-index"] = index * 2;
     if (cardShade) {
-      cardShade.style.left = 50 + index * 50 + "px";
+      cardShade.style.left = offset + index * spacing + "px";
       cardShade.style["z-index"] = index * 2 + 1;
     }
   });
@@ -216,6 +219,7 @@
     -moz-opacity: 0.7;
     opacity: 0.7;
     top: 60px;
+    pointer-events: none;
   }
 
   .picked {

@@ -36,8 +36,9 @@
     sendETH,
     listenRuleTypeDetermined,
     determineRuleType,
+    getSalt,
   } from "../utils/web3";
-  let playerHand, opponentHand;
+
   let playerDuck = [],
     opponentDuck = [];
   let oPlayerDucks = [],
@@ -48,7 +49,7 @@
   let opponentBalls = [];
   let playerPoint, opponentPoint;
   let playButton;
-  let focusCard, focusIndex;
+  let focusingCard, focusingIndex, focusingCardSalt;
   let messageBoard;
   let ruleMode = { role: -1, mode: -1 };
   let oHidden;
@@ -65,11 +66,17 @@
   let playerCommitedHands;
   let opponentCommitedHands;
   let roundPlayed;
+  let ruleDetermined;
   let playerCommited;
   let opponentCommited;
   let playerPickRule;
   let canRestart;
   let BN;
+  $: isPlayable =
+    playerCommitedHands &&
+    opponentCommitedHands &&
+    ruleDetermined &&
+    !roundPlayed;
 
   onMount(async () => {
     oHidden.style.display = "block";
@@ -102,6 +109,11 @@
   });
 
   async function init() {
+    (playerDuck = []), (opponentDuck = []);
+    ruleMode = { role: -1, mode: -1 };
+    playerBattleCard = undefined;
+    opponentBattleCard = undefined;
+    ruleDetermined = false;
     playerBalls = [
       { id: "0", win: false },
       { id: "1", win: false },
@@ -196,9 +208,13 @@
     let hands = [];
     for (let i = 0; i < 5; i++) {
       if (i == 0 || i == 1) {
-        hands.push(web3.utils.sha3(confirmedHands[i].code.toString()));
+        let salt = getSalt();
+        oPlayerDucks[i].salt = salt;
+        hands.push(
+          web3.utils.toBN(web3.utils.soliditySha3(confirmedHands[i].code, salt))
+        );
       } else {
-        hands.push(confirmedHands[i].code.toString());
+        hands.push(web3.utils.toBN(confirmedHands[i].code));
       }
     }
     playerDuck = confirmedHands;
@@ -206,9 +222,7 @@
     await commitHands(web3, contractAddress, tableId, hands);
     playerCommitedHands = true;
 
-    if (opponentCommitedHands) {
-      newMessage("The first round starts. Please pick a card to play.");
-    }
+    checkTheFirstRoundStart();
 
     if (playerPickRule) {
       playerPickRule = false;
@@ -262,12 +276,13 @@
     } else {
       updateRuleMode(0, event.returnValues.ruleType);
     }
+    ruleDetermined = true;
+    checkTheFirstRoundStart();
   }
 
   function handleHandsCommitted(event) {
     newMessage("Your opponent has committed the hands.");
     let hands = event.returnValues.hands;
-    console.log(hands);
     opponentDuck = [
       bgPooker,
       bgPooker,
@@ -276,9 +291,7 @@
       getCardByCode(Number(hands[4])),
     ];
     opponentCommitedHands = true;
-    if (playerCommitedHands) {
-      newMessage("The first round starts. Please pick a card to play.");
-    }
+    checkTheFirstRoundStart();
   }
 
   async function handleCardCommitted(event) {
@@ -294,8 +307,10 @@
         web3,
         contractAddress,
         tableId,
-        focusIndex,
-        focusCard.code.toString()
+        focusingIndex,
+        focusingCard.code,
+        focusingCardSalt,
+        oPlayerDucks[focusingIndex].salt
       );
     }
   }
@@ -316,7 +331,6 @@
     let endRound = Number(event.returnValues.round);
     newMessage(`Round ${endRound} ended.`);
     let winner = event.returnValues.winner;
-    console.log(winner);
     if (web3.utils.toBN(winner).isZero()) {
       newMessage(`Wow draw round!`);
     } else {
@@ -327,6 +341,7 @@
       }
       newMessage(`Winner: ${winner} with points: ${event.returnValues.points}`);
     }
+
     if (endRound < 5) {
       newMessage(`Next round starts in 5 seconds.`);
       setTimeout(() => {
@@ -341,10 +356,11 @@
   async function handleSetEnded(event) {
     let endSet = Number(event.returnValues.set);
     newMessage(`Set ${endSet} ended.`);
+    ruleDetermined = false;
     let winner = event.returnValues.winner;
     if (web3.utils.toBN(winner).isZero()) {
-      newMessage(
-        `Wow draw set, a randomness will determine the card pool for next set!`
+      setFixedMessage(
+        `Wow draw set, a randomness will determine the rule for the next set!`
       );
       setTimeout(async () => {
         newMessage(`Next set starts in 2 seconds`);
@@ -360,7 +376,9 @@
       } else {
         opponentBalls[0].win = true;
         newMessage(`Opponent won the set! ${printGameScores()}`);
-        newMessage(`As a compensation, you will pick the rule for next set!`);
+        setFixedMessage(
+          `As a compensation, you will pick the rule for the next set!`
+        );
         playerPickRule = true;
         setTimeout(async () => {
           newMessage(`Next set starts in 2 seconds`);
@@ -377,6 +395,7 @@
       } else {
         playerBalls[0].win = true;
         newMessage(`You won the set! ${printGameScores()}`);
+        setFixedMessage("Waiting for the opponent to pick the rule...");
         setTimeout(async () => {
           newMessage(`Next set starts in 2 seconds`);
           await nextSet();
@@ -395,11 +414,11 @@
     playerPoint = 0;
     opponentPoint = 0;
     oPlayerDucks = [
-      { picked: false, vague: false },
-      { picked: false, vague: false },
-      { picked: false, vague: false },
-      { picked: false, vague: false },
-      { picked: false, vague: false },
+      { picked: false, vague: false, salt: 0 },
+      { picked: false, vague: false, salt: 0 },
+      { picked: false, vague: false, salt: 0 },
+      { picked: false, vague: false, salt: 0 },
+      { picked: false, vague: false, salt: 0 },
     ];
     oOpponentDucks = [
       { vague: false },
@@ -451,12 +470,13 @@
     messageBoard.initMessages(
       ["Welcome! Let's have a card battle! Best of three!"].map(
         messageBoard.createMessage
-      )
+      ),
+      messageBoard.createMessage("Waiting for the game to start...")
     );
   }
 
   function focus(event) {
-    if (playerCommitedHands && opponentCommitedHands && !roundPlayed) {
+    if (isPlayable) {
       let playerCard = event.detail.wantCard;
       let index = event.detail.index;
       foucsOnCardFromHand(playerCard, index);
@@ -482,9 +502,10 @@
 
   async function onPlay() {
     roundPlayed = true;
-    focusCard.chosen = true;
-    playerBattleCard = { ...focusCard };
-    oPlayerDucks[focusIndex].vague = true;
+    focusingCardSalt = getSalt();
+    focusingCard.chosen = true;
+    playerBattleCard = { ...focusingCard };
+    oPlayerDucks[focusingIndex].vague = true;
     unpickDuck(oPlayerDucks);
     restorePlayButton();
 
@@ -493,8 +514,9 @@
       web3,
       contractAddress,
       tableId,
-      web3.utils.sha3(focusCard.code.toString())
+      web3.utils.soliditySha3(focusingCard.code, focusingCardSalt)
     );
+
     playerCommited = true;
     if (opponentCommited) {
       opponentCommited = false;
@@ -504,8 +526,10 @@
         web3,
         contractAddress,
         tableId,
-        focusIndex,
-        focusCard.code.toString()
+        focusingIndex,
+        focusingCard.code,
+        focusingCardSalt,
+        oPlayerDucks[focusingIndex].salt
       );
     }
   }
@@ -518,6 +542,13 @@
     web3.eth.clearSubscriptions();
     canRestart = false;
     init();
+    startTablePick();
+  }
+
+  function checkTheFirstRoundStart() {
+    if (playerCommitedHands && opponentCommitedHands && ruleDetermined) {
+      newMessage("The first round starts. Please pick a card to play.");
+    }
   }
 
   function unpickDuck(oPlayerDucks) {
@@ -528,8 +559,6 @@
 
   function restorePlayButton() {
     playButton = false;
-    // focusCard = undefined;
-    // focusIndex = -1;
   }
 
   function enablePlayButton() {
@@ -537,8 +566,8 @@
   }
 
   function setFocusCard(_focusCard, _focusIndex) {
-    focusCard = _focusCard;
-    focusIndex = _focusIndex;
+    focusingCard = _focusCard;
+    focusingIndex = _focusIndex;
   }
 
   function getPickedFromDuck(oPlayerDucks) {
@@ -554,6 +583,10 @@
     messageBoard.appendMessage(text);
   }
 
+  function setFixedMessage(text) {
+    messageBoard.setFixedMessage(text);
+  }
+
   function printGameScores() {
     return (
       "(" +
@@ -567,7 +600,7 @@
   function updateRuleMode(role, mode) {
     ruleMode.role = role;
     ruleMode.mode = Number(mode);
-    newMessage(
+    setFixedMessage(
       `The current set uses ${buildRuleDesc(Number(mode))} by ${formatRuleRole(
         role
       )}.`
@@ -611,8 +644,8 @@
         slot="avatar"
         src="/images/player.jpg"
         alt="player"
-        height="100"
-        width="100"
+        height={100}
+        width={100}
       />
       <span slot="name"> {myName} </span>
       <span slot="level"> 1 </span>
@@ -633,8 +666,8 @@
         slot="avatar"
         src="/images/opponent.jpg"
         alt="opponent"
-        height="100"
-        width="100"
+        height={100}
+        width={100}
       />
       <span slot="name"> {opponentName} </span>
       <span slot="level"> 99 </span>
@@ -647,17 +680,18 @@
     <MessageBoard bind:this={messageBoard} />
   </div>
   <div class="box">
-    <Hand bind:this={playerHand}>
+    <Hand>
       <span> Player </span>
       {#each playerDuck as wantCard, i}
         <Card
           on:click={focus}
-          canPan={playerCommitedHands && opponentCommitedHands && !roundPlayed}
+          canPan={isPlayable && !oPlayerDucks[i].vague}
           {panEndHandler}
           {wantCard}
           index={i}
           vague={oPlayerDucks[i].vague}
           picked={oPlayerDucks[i].picked}
+          offset={50}
         />
       {/each}
     </Hand>
@@ -665,14 +699,11 @@
       on:play={onPlay}
       on:next={onNextGame}
       on:restart={onRestart}
-      enablePlay={playerCommitedHands &&
-        opponentCommitedHands &&
-        playButton &&
-        !roundPlayed}
+      enablePlay={isPlayable && playButton}
       enableNext={false}
       enableRestart={canRestart}
     />
-    <Hand bind:this={opponentHand}>
+    <Hand>
       <span> Opponent </span>
       {#each opponentDuck as wantCard, i}
         <Card
@@ -680,6 +711,7 @@
           index={i}
           vague={oOpponentDucks[i].vague}
           picked={oOpponentDucks[i].picked}
+          offset={50}
         />
       {/each}
     </Hand>
@@ -695,7 +727,7 @@
 />
 <CardPool
   remark={playerPickRule ? "Note: you can pick the rule for next set" : ""}
-  cardColumns={cardPool}
+  cards={cardPool}
   onPick={onCardPoolPick}
   on:confirm={onCardPoolConfirm}
 />
@@ -729,8 +761,7 @@
   }
   .messageBox {
     display: flex;
-    height: 10vh;
-    width: 100vw;
+    height: 13vh;
   }
   header,
   footer {

@@ -1,18 +1,26 @@
 <script>
   import { createEventDispatcher } from "svelte";
   import { afterUpdate } from "svelte";
-  import Card, { bgPooker, getCardByCode } from "./Card.svelte";
+  import Card, { bgPooker } from "./Card.svelte";
 
   export let onPick = false;
+  export let cards = [];
+  export let remark = "";
+
   let oCardPoolPicker;
   let duckHolder = [bgPooker, bgPooker, bgPooker, bgPooker, bgPooker];
-  let duckHolderVague = [true, true, false, false, false];
-  export let cardColumns = [];
-  export let remark = "";
-  // // test: populate cardColumns by 0-20 code
-  // for (let j = 0; j < 20; j++) {
-  //   cardColumns.push(getCardByCode(j));
-  // }
+  let duckHolderProps = [
+    { cardIndex: undefined, vague: true },
+    { cardIndex: undefined, vague: true },
+    { cardIndex: undefined, vague: false },
+    { cardIndex: undefined, vague: false },
+    { cardIndex: undefined, vague: false },
+  ];
+  let cardsProps = Array.from(Array(20), (item, index) => ({
+    picked: false,
+    vague: false,
+  }));
+  let focusingCard, focusingIndex;
 
   // event
   const dispatch = createEventDispatcher();
@@ -28,35 +36,98 @@
   let panEndHandler = function (wantCard, index, x, y) {
     console.log("x: " + x + " y: " + y);
     // decide if this is a valid pan
-    if (y > 100 && y < 180) {
+    if (y > 80 && y < 200) {
       // x: 457 y: 127
       // x: 598 y: 137
       // x: 756 y: 118
       // x: 915 y: 124
       // x: 1060 y: 119
-      if (x > 300 && x < 520) {
-        duckHolder[0] = wantCard;
-      } else if (x > 520 && x < 700) {
+      if (x > 400 && x < 544) {
+        // 1
+        setDuckHolder(0, wantCard, index);
+      } else if (x > 544 && x < 688) {
         // 2
-        duckHolder[1] = wantCard;
-      } else if (x > 700 && x < 880) {
+        setDuckHolder(1, wantCard, index);
+      } else if (x > 688 && x < 832) {
         // 3
-        duckHolder[2] = wantCard;
-      } else if (x > 880 && x < 1000) {
+        setDuckHolder(2, wantCard, index);
+      } else if (x > 832 && x < 976) {
         // 4
-        duckHolder[3] = wantCard;
-      } else if (x > 1000 && x < 1200) {
+        setDuckHolder(3, wantCard, index);
+      } else if (x > 976 && x < 1120) {
         // 5
-        duckHolder[4] = wantCard;
+        setDuckHolder(4, wantCard, index);
       }
     }
     return [-1, -1];
   };
 
-  function focus(event) {
-    // let playerCard = event.detail.wantCard;
-    // let index = event.detail.index;
-    // foucsOnCardFromHand(playerCard, index);
+  function onClickDuckHolder(event) {
+    if (focusingIndex !== undefined) {
+      let holderIndex = event.detail.index;
+      setDuckHolder(holderIndex, focusingCard, focusingIndex);
+    } else {
+      alert("Please select a card first or drag a card to a holder");
+    }
+  }
+
+  function setDuckHolder(holderIndex, card, cardIndex) {
+    if (duckHolderProps[holderIndex].cardIndex !== undefined) {
+      cardsProps[duckHolderProps[holderIndex].cardIndex].vague = false;
+    }
+    duckHolderProps[holderIndex].cardIndex = cardIndex;
+    cardsProps[cardIndex].vague = true;
+    duckHolder[holderIndex] = card;
+    clearFocusCard();
+    unpickDuck();
+  }
+
+  function onClickCard(event) {
+    // handle and render picked
+    let playerCard = event.detail.wantCard;
+    let index = event.detail.index;
+    cardsProps[index].picked = true;
+    if (focusingIndex > -1) {
+      cardsProps[focusingIndex].picked = false;
+    }
+    if (focusingIndex === index) {
+      clearFocusCard();
+    } else {
+      setFocusCard(playerCard, index);
+    }
+  }
+
+  function setFocusCard(_focusCard, _focusIndex) {
+    focusingCard = _focusCard;
+    focusingIndex = _focusIndex;
+  }
+
+  function clearFocusCard() {
+    focusingCard = undefined;
+    focusingIndex = undefined;
+  }
+
+  function unpickDuck() {
+    for (let card of cardsProps) {
+      card.picked = false;
+    }
+  }
+
+  function initCardPoolProps() {
+    duckHolder = [bgPooker, bgPooker, bgPooker, bgPooker, bgPooker];
+    duckHolderProps = [
+      { cardIndex: undefined, vague: true },
+      { cardIndex: undefined, vague: true },
+      { cardIndex: undefined, vague: false },
+      { cardIndex: undefined, vague: false },
+      { cardIndex: undefined, vague: false },
+    ];
+    cardsProps = Array.from(Array(20), (item, index) => ({
+      picked: false,
+      vague: false,
+    }));
+    focusingCard = undefined;
+    focusingIndex = undefined;
   }
 
   function confirm(event) {
@@ -77,7 +148,7 @@
       confirmedHands,
     });
 
-    duckHolder = [bgPooker, bgPooker, bgPooker, bgPooker, bgPooker];
+    initCardPoolProps();
   }
 </script>
 
@@ -85,13 +156,15 @@
   <div class="hand">
     {#each duckHolder as wantCard, i}
       <Card
-        on:click={focus}
+        on:click={onClickDuckHolder}
         canPan={false}
         {panEndHandler}
         {wantCard}
-        index={3 * i}
-        vague={duckHolderVague[i]}
+        index={i}
+        spacing={150}
+        vague={duckHolderProps[i].vague}
         picked={false}
+        forbidClickIfVague={false}
       />
     {/each}
   </div>
@@ -105,59 +178,24 @@
   </div>
 
   <div style="height: 20%;" />
+  {#each [...Array(4).keys()] as j}
+    <div class="cardSet">
+      {#each cards.slice(5 * j, 5 * (j + 1)) as wantCard, i}
+        <Card
+          on:click={onClickCard}
+          canPan={!cardsProps[5 * j + i].vague}
+          {panEndHandler}
+          {wantCard}
+          index={5 * j + i}
+          spacing={175}
+          offset={-5 * j * 175}
+          vague={cardsProps[5 * j + i].vague}
+          picked={cardsProps[5 * j + i].picked}
+        />
+      {/each}
+    </div>
+  {/each}
 
-  <div class="cardSet">
-    {#each cardColumns.slice(0, 5) as wantCard, i}
-      <Card
-        on:click={focus}
-        canPan={!wantCard.chosen}
-        {panEndHandler}
-        {wantCard}
-        index={3.5 * i}
-        vague={wantCard.chosen}
-        picked={false}
-      />
-    {/each}
-  </div>
-  <div class="cardSet">
-    {#each cardColumns.slice(5, 10) as wantCard, i}
-      <Card
-        on:click={focus}
-        canPan={!wantCard.chosen}
-        {panEndHandler}
-        {wantCard}
-        index={3.5 * i}
-        vague={wantCard.chosen}
-        picked={false}
-      />
-    {/each}
-  </div>
-  <div class="cardSet">
-    {#each cardColumns.slice(10, 15) as wantCard, i}
-      <Card
-        on:click={focus}
-        canPan={!wantCard.chosen}
-        {panEndHandler}
-        {wantCard}
-        index={3.5 * i}
-        vague={wantCard.chosen}
-        picked={false}
-      />
-    {/each}
-  </div>
-  <div class="cardSet">
-    {#each cardColumns.slice(15, 20) as wantCard, i}
-      <Card
-        on:click={focus}
-        canPan={!wantCard.chosen}
-        {panEndHandler}
-        {wantCard}
-        index={3.5 * i}
-        vague={wantCard.chosen}
-        picked={false}
-      />
-    {/each}
-  </div>
   <div style="height: 20%;" />
 </div>
 
