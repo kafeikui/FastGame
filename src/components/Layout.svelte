@@ -15,7 +15,6 @@
   import RuleBoard from "./RuleBoard.svelte";
   import RulePicker, { buildRuleDesc } from "./RulePicker.svelte";
   import TablePicker from "./TablePicker.svelte";
-  import { getEnv } from "../utils/envManager";
   import CardPool from "./CardPool.svelte";
   import {
     createTable,
@@ -57,10 +56,10 @@
   let onTablePick;
   let onCardPoolPick;
   let web3;
-  let websocketProvider = getEnv("websocketProvider");
-  let contractAddress = getEnv("contractAddress");
-  let devAccounts = getEnv("devAccounts");
-  let demoETHValue = getEnv("demoETHValue");
+  let websocketProvider = import.meta.env.WEBSOCKET_PROVIDER;
+  let contractAddress = import.meta.env.CONTRACT_ADDRESS;
+  let devAccounts = import.meta.env.DEV_ACCOUNTS;
+  let demoETHValue = import.meta.env.DEMO_ETH_VALUE;
   let myName = "Card Beginner";
   let opponentName = "Card Sensei";
   let opponent;
