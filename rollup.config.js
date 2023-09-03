@@ -6,6 +6,8 @@ import { terser } from "rollup-plugin-terser";
 import css from "rollup-plugin-css-only";
 import json from "@rollup/plugin-json";
 import nodePolyfills from "rollup-plugin-node-polyfills";
+import replace from "@rollup/plugin-replace";
+require("dotenv").config();
 
 const production = !process.env.ROLLUP_WATCH;
 
@@ -67,6 +69,20 @@ export default {
       dedupe: ["svelte"],
     }),
     commonjs(),
+
+    replace({
+      preventAssignment: true,
+      "process.env.WEBSOCKET_PROVIDER": JSON.stringify(
+        process.env.WEBSOCKET_PROVIDER
+      ),
+      "process.env.CONTRACT_ADDRESS": JSON.stringify(
+        process.env.CONTRACT_ADDRESS
+      ),
+      "process.env.DEV_ACCOUNTS": JSON.stringify(
+        process.env.DEV_ACCOUNTS.split(",")
+      ),
+      "process.env.DEMO_ETH_VALUE": JSON.stringify(process.env.DEMO_ETH_VALUE),
+    }),
 
     // In dev mode, call `npm run start` once
     // the bundle has been generated

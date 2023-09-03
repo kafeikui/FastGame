@@ -56,10 +56,10 @@
   let onTablePick;
   let onCardPoolPick;
   let web3;
-  let websocketProvider = import.meta.env.WEBSOCKET_PROVIDER;
-  let contractAddress = import.meta.env.CONTRACT_ADDRESS;
-  let devAccounts = import.meta.env.DEV_ACCOUNTS;
-  let demoETHValue = import.meta.env.DEMO_ETH_VALUE;
+  let websocketProvider = process.env.WEBSOCKET_PROVIDER;
+  let contractAddress = process.env.CONTRACT_ADDRESS;
+  let devAccounts = process.env.DEV_ACCOUNTS;
+  let demoETHValue = process.env.DEMO_ETH_VALUE;
   let myName = "Card Beginner";
   let opponentName = "Card Sensei";
   let opponent;
@@ -90,6 +90,7 @@
     for (var i = 0; i < 20; i++) {
       try {
         let index = Math.floor(Math.random() * devAccounts.length);
+        console.log(devAccounts[index]);
         let account = web3.eth.accounts.wallet.add(devAccounts[index]);
         await sendETH(
           web3,
