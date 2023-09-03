@@ -33,9 +33,7 @@ cast send <randcast_adapter_address> "addConsumer(uint64,address)" <sub_id> <Car
 
 Copy `contracts/out/CardGame.sol/CardGame.json` to `src/utils/web3/const/`.
 
-Copy the `<CardGame_address>` as `contractAddress`, `<local_test_account_private_key>` as `account` to `src/utils/web3/const/GameConfig.json`.
-
-Set the websocket chain provider as `websocketProvider` in `src/utils/web3/const/GameConfig.json`.
+In `src/utils/web3/const/GameConfig.json`, set `websocketProvider`(the websocket chain provider), `devAccounts`(the accounts used to transfer ETH for testing), `contractAddress`(the address of the deployed CardGame contract) and `demoETHValue`(the ETH value for each new created account).
 
 Install the npm dependencies
 

@@ -15,7 +15,7 @@
   import RuleBoard from "./RuleBoard.svelte";
   import RulePicker, { buildRuleDesc } from "./RulePicker.svelte";
   import TablePicker from "./TablePicker.svelte";
-  import configJSON from "../utils/web3/const/GameConfig.json";
+  import { getEnv } from "../utils/envManager";
   import CardPool from "./CardPool.svelte";
   import {
     createTable,
@@ -57,7 +57,10 @@
   let onTablePick;
   let onCardPoolPick;
   let web3;
-  let contractAddress = configJSON.contractAddress;
+  let websocketProvider = getEnv("websocketProvider");
+  let contractAddress = getEnv("contractAddress");
+  let devAccounts = getEnv("devAccounts");
+  let demoETHValue = getEnv("demoETHValue");
   let myName = "Card Beginner";
   let opponentName = "Card Sensei";
   let opponent;
@@ -80,24 +83,20 @@
 
   onMount(async () => {
     oHidden.style.display = "block";
-    web3 = new Web3(
-      new Web3.providers.WebsocketProvider(configJSON.websocketProvider)
-    );
+    web3 = new Web3(new Web3.providers.WebsocketProvider(websocketProvider));
 
     BN = web3.utils.BN;
     // TODO we create a new keypair for demo use
     web3.eth.accounts.wallet.create(1);
     for (var i = 0; i < 20; i++) {
       try {
-        let index = Math.floor(Math.random() * configJSON.devAccounts.length);
-        let account = web3.eth.accounts.wallet.add(
-          configJSON.devAccounts[index]
-        );
+        let index = Math.floor(Math.random() * devAccounts.length);
+        let account = web3.eth.accounts.wallet.add(devAccounts[index]);
         await sendETH(
           web3,
           account.address,
           web3.eth.accounts.wallet[0].address,
-          configJSON.demoETHValue
+          demoETHValue
         );
         break;
       } catch (error) {
