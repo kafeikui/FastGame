@@ -79,6 +79,7 @@
     opponentCommitedHands &&
     ruleDetermined &&
     !roundPlayed;
+  let subscriptions = [];
 
   onMount(async () => {
     oHidden.style.display = "block";
@@ -103,7 +104,7 @@
         console.error(error);
       }
     }
-    init();
+    await init();
     startTablePick();
   });
 
@@ -121,6 +122,8 @@
       { id: "0", win: false },
       { id: "1", win: false },
     ];
+    playerPoint = undefined;
+    opponentPoint = undefined;
     // A randomness will decide the card pool and the rule for the first set
     initMessageBoard();
     myName =
@@ -128,12 +131,25 @@
       "..." +
       web3.eth.accounts.wallet[0].address.slice(-4);
 
-    listenTableCreated(
-      web3,
-      contractAddress,
-      handleTableCreated,
-      web3.eth.accounts.wallet[0].address
+    addSubscription(
+      listenTableCreated(
+        web3,
+        contractAddress,
+        handleTableCreated,
+        web3.eth.accounts.wallet[0].address
+      )
     );
+  }
+
+  async function clearSubscriptions() {
+    for (let subscription of subscriptions) {
+      await subscription.unsubscribe();
+    }
+    subscriptions = [];
+  }
+
+  function addSubscription(subscription) {
+    subscriptions = [...subscriptions, subscription];
   }
 
   async function initGame(_opponent) {
@@ -147,40 +163,54 @@
   }
 
   function initGameListeners() {
-    listenCardPoolGenerated(
-      web3,
-      contractAddress,
-      handleCardPoolGenerated,
-      tableId
+    addSubscription(
+      listenCardPoolGenerated(
+        web3,
+        contractAddress,
+        handleCardPoolGenerated,
+        tableId
+      )
     );
-    listenHandsCommitted(
-      web3,
-      contractAddress,
-      handleHandsCommitted,
-      tableId,
-      opponent
+    addSubscription(
+      listenHandsCommitted(
+        web3,
+        contractAddress,
+        handleHandsCommitted,
+        tableId,
+        opponent
+      )
     );
-    listenCardCommitted(
-      web3,
-      contractAddress,
-      handleCardCommitted,
-      tableId,
-      opponent
+    addSubscription(
+      listenCardCommitted(
+        web3,
+        contractAddress,
+        handleCardCommitted,
+        tableId,
+        opponent
+      )
     );
-    listenCardPlayed(
-      web3,
-      contractAddress,
-      handleCardPlayed,
-      tableId,
-      opponent
+    addSubscription(
+      listenCardPlayed(
+        web3,
+        contractAddress,
+        handleCardPlayed,
+        tableId,
+        opponent
+      )
     );
-    listenRoundEnded(web3, contractAddress, handleRoundEnded, tableId);
-    listenSetEnded(web3, contractAddress, handleSetEnded, tableId);
-    listenRuleTypeDetermined(
-      web3,
-      contractAddress,
-      handleRuleTypeDetermined,
-      tableId
+    addSubscription(
+      listenRoundEnded(web3, contractAddress, handleRoundEnded, tableId)
+    );
+    addSubscription(
+      listenSetEnded(web3, contractAddress, handleSetEnded, tableId)
+    );
+    addSubscription(
+      listenRuleTypeDetermined(
+        web3,
+        contractAddress,
+        handleRuleTypeDetermined,
+        tableId
+      )
     );
   }
 
@@ -237,11 +267,13 @@
   function handleTableCreated(event) {
     newMessage("You have created the table, id: " + event.returnValues.tableId);
     tableId = new BN(event.returnValues.tableId);
-    listenTableJoined(
-      web3,
-      contractAddress,
-      handleTableJoined,
-      event.returnValues.tableId
+    addSubscription(
+      listenTableJoined(
+        web3,
+        contractAddress,
+        handleTableJoined,
+        event.returnValues.tableId
+      )
     );
   }
 
@@ -537,10 +569,13 @@
     await nextSet();
   }
 
-  function onRestart() {
-    web3.eth.clearSubscriptions();
+  async function onRestart() {
+    // can't use web3.eth.clearSubscriptions() here, somehow we can't create another subscription after that
+    // await web3.eth.clearSubscriptions();
+    await clearSubscriptions();
+
     canRestart = false;
-    init();
+    await init();
     startTablePick();
   }
 
@@ -760,7 +795,7 @@
   }
   .messageBox {
     display: flex;
-    height: 13vh;
+    height: 16vh;
   }
   header,
   footer {

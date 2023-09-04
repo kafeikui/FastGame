@@ -61,7 +61,7 @@
     user-select: text;
   }
   .scrollable {
-    height: 10vh;
+    height: 13vh;
     text-align: center;
     flex: 1 1 auto;
     border-top: 1px solid #eee;
