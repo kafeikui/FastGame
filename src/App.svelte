@@ -1,10 +1,8 @@
 <script>
-	import Layout from "./components/Layout.svelte";
+  import WarRoom from "./components/pickandfight/WarRoom.svelte";
 </script>
 
-
+<WarRoom />
 
 <style>
 </style>
-
-<Layout />
