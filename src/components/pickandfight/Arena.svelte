@@ -451,7 +451,6 @@
   }
 </script>
 
-<header />
 <body>
   <div class="bg">
     <div class="state-bar">
@@ -501,7 +500,7 @@
     </div>
     <div class="audio">
       <!-- svelte-ignore a11y-media-has-caption -->
-      <audio controls loop src="./audios/bgm/fight.m4a" bind:this={oAudio} />
+      <audio controls loop src="./audios/bgm/fight.mp3" bind:this={oAudio} />
     </div>
     <div class="audioVolumnSwitch">
       <AudioVolumn {isMuted} on:switchVol={onSwitchAudioVolumn} />
@@ -524,20 +523,11 @@
     </div>
   </div>
 </body>
-<footer />
 
 <style>
-  header {
-    width: 100vw;
-    height: 2vh;
-  }
-  footer {
-    width: 100vw;
-    height: 2vh;
-  }
   body {
     width: 100vw;
-    height: 96vh;
+    height: 100vh;
     overflow: hidden;
     background: url(/images/bg.jpg) no-repeat;
     background: linear-gradient(45deg, rgb(205, 200, 200), rgb(159, 176, 190))
@@ -554,6 +544,7 @@
   }
   .state-bar {
     border-style: solid;
+    border-top-style: none;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -633,6 +624,7 @@
   }
   .sequence-bar {
     border-style: solid;
+    border-top-style: none;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -645,6 +637,7 @@
     align-items: center;
     margin-left: 30px;
     margin-right: 30px;
+    margin-top: 30px;
     width: 50%;
     height: 100%;
   }

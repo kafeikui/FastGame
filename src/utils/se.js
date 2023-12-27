@@ -21,7 +21,7 @@ export const SE = {
     path: "audios/se/pa.wav",
     type: "audio/wav",
     duration: 1000,
-    volume: 0.5,
+    volume: 0.7,
   },
   Tick: {
     path: "audios/se/tick.wav",
@@ -63,10 +63,11 @@ export const isPlaying = (se) => {
 };
 
 export const stopSe = (se) => {
-  const playingItem = isPlaying(se);
-  if (playingItem) {
-    playingItem.dom.pause();
-  }
+  seList.forEach((item) => {
+    if (item.dom.getAttribute("src") === se.path) {
+      item.dom.pause();
+    }
+  });
 };
 
 export const muteAll = () => {
@@ -80,20 +81,23 @@ export const unmuteAll = () => {
   isMuted = false;
 };
 
-export const broadcastSe = (se) => {
+export const broadcastSe = (se, needAntiShake = true) => {
   if (isMuted) {
     return;
   }
   const now = new Date().getTime();
-  const sameItem = seList.find(
-    (item) =>
-      item.dom.getAttribute("src") === se.path &&
-      Math.abs(item.finishTime - now - se.duration) < 80
-  );
-  if (sameItem) {
-    sameItem.dom.volume = Math.min(sameItem.dom.volume + 0.1, 1);
-    return;
+  if (needAntiShake) {
+    const sameItem = seList.find(
+      (item) =>
+        item.dom.getAttribute("src") === se.path &&
+        Math.abs(item.finishTime - now - se.duration) < 80
+    );
+    if (sameItem) {
+      sameItem.dom.volume = Math.min(sameItem.dom.volume + 0.1, 1);
+      return;
+    }
   }
+
   const potentialDom = seList.find((item) => item.finishTime < now);
   if (potentialDom) {
     potentialDom.dom.setAttribute("src", se.path);

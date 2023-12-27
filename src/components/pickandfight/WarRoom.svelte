@@ -265,7 +265,7 @@
     if (timeToCountDown > 5) {
       timeToCountDown--;
       if (!isPlaying(SE.Tick)) {
-        broadcastSe(SE.Tick);
+        broadcastSe(SE.Tick, false);
       }
       setTimeout(countDownCommitmentTime, 1000);
     } else {
@@ -388,7 +388,6 @@
       false
     );
     selfCards = [...selfCards, card];
-    console.log(selfCards);
     hands = [...hands, card];
     hideWaitingPage();
   }
@@ -451,7 +450,6 @@
       0,
       false
     );
-    console.log(newCard);
     let material1 = new RevealedCard(
       originalCard.index,
       originalCard.id,
@@ -569,7 +567,6 @@
         web3.utils.toBN(web3.utils.soliditySha3(card.index, card.id, card.salt))
       );
     }
-    console.log(selfCards);
     await web3CommitPickedCards(web3, contractAddress, tableId, commitments);
     hideWaitingPage();
   }
@@ -901,7 +898,6 @@
       "Your opponent has played the sequence, the inning will start soon."
     );
     let revealedSequence = event.returnValues.cards;
-    console.log("revealedSequence", revealedSequence);
     opponentSequence = revealedSequence.map((card) => {
       return parseInt(card.id);
     });
@@ -921,7 +917,6 @@
     cardsToPick = availableCards.map((card, index) => {
       return new Card(index, card, CardType.Reforge, 0, false);
     });
-    console.log(cardsToPick);
 
     hideWaitingPage();
     startCardPick();
@@ -979,6 +974,7 @@
       );
     }
     pauseInteraction();
+    canClaimVictory = false;
     canRestart = true;
   }
 </script>
@@ -1118,6 +1114,7 @@
   }
   .state-bar {
     border-style: solid;
+    border-top-style: none;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1157,6 +1154,7 @@
   }
   .hand-bar {
     border-style: solid;
+    border-top-style: none;
     display: flex;
     justify-content: space-between;
     align-items: center;
