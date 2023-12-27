@@ -179,7 +179,6 @@
         console.error(error);
       }
     }
-    playMusic();
     await init();
     startTablePick();
 
@@ -324,6 +323,7 @@
 
   async function onCreateTable() {
     broadcastSe(SE.Click);
+    playMusic();
     closeTablePick();
     newMessage("Creating table...");
     isTableCreator = true;
@@ -332,6 +332,7 @@
 
   async function onJoinTable(event) {
     broadcastSe(SE.Click);
+    playMusic();
     closeTablePick();
     tableId = new BN(event.detail.tableId);
     let players = await web3GetPlayers(web3, contractAddress, tableId);
