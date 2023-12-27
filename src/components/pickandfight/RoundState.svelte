@@ -26,13 +26,19 @@
   <div class="state_params">
     <div class="round">round: {round + 1}</div>
     <div class="inning">inning: {inning + 1}</div>
+  </div>
+  <div style="width: 5%;" />
+  <div class="state_params">
     <div class="order">
       {isSelfOffensive ? "on the offensive" : "on the defensive"}
     </div>
-    <div class="time">time: {time}</div>
+    <div class="time">
+      time: <span style="color:#9b4400;font-weight:bold">{time}</span>
+    </div>
   </div>
   <div style="width: 5%;" />
   <button class="help_icon" on:click={showHelp} />
+  <div style="width: 5%;" />
   <slot name="audioVolumn" />
 </div>
 <div class="address_box">
@@ -72,5 +78,8 @@
     background-position: center;
     cursor: pointer;
     margin: 0;
+  }
+  .state_params {
+    font-size: 24px;
   }
 </style>

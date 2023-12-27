@@ -257,7 +257,7 @@ library GameFight {
     // Buff with the same id will be replaced
     function _addBuff(PlayerState memory state, Buff memory buff) internal pure {
         for (uint256 i = 0; i < state.buffCount; i++) {
-            if (state.buffs[i].duration > 0 && state.buffs[i].id % MAX_CARD_ID == buff.id % MAX_CARD_ID) {
+            if (state.buffs[i].duration > 0 && state.buffs[i].id % (MAX_CARD_ID + 1) == buff.id % (MAX_CARD_ID + 1)) {
                 state.buffs[i].duration = 0;
                 break;
             }
@@ -280,7 +280,7 @@ library GameFight {
 
     function _removeBuff(PlayerState memory state, uint32 buffId) internal pure returns (bool) {
         for (uint256 i = 0; i < state.buffCount; i++) {
-            if (state.buffs[i].duration > 0 && state.buffs[i].id % MAX_CARD_ID == buffId % MAX_CARD_ID) {
+            if (state.buffs[i].duration > 0 && state.buffs[i].id % (MAX_CARD_ID + 1) == buffId % (MAX_CARD_ID + 1)) {
                 state.buffs[i].duration = 0;
                 return true;
             }
@@ -512,10 +512,10 @@ library GameFight {
                 Buff memory buff = Buff(cardId, true, 2, 0);
                 _addBuff(self, buff);
             } else if (level == 2) {
-                Buff memory buff = Buff(cardId, true, 2, 0);
+                Buff memory buff = Buff(cardId, true, 3, 0);
                 _addBuff(self, buff);
             } else if (level == 3) {
-                Buff memory buff = Buff(cardId, true, 3, 0);
+                Buff memory buff = Buff(cardId, true, 4, 0);
                 _addBuff(self, buff);
             }
         } else if (id == 14) {
@@ -572,11 +572,11 @@ library GameFight {
         } else if (id == 18) {
             _handleDamage(self, enemy, self.damage * 2, randomness);
             if (level == 2) {
-                Buff memory buff = Buff(cardId, false, 1, 0);
-                _addBuff(enemy, buff);
+                Buff memory buff = Buff(cardId, true, 1, 0);
+                _addBuff(self, buff);
             } else if (level == 3) {
-                Buff memory buff = Buff(cardId, false, 2, 0);
-                _addBuff(enemy, buff);
+                Buff memory buff = Buff(cardId, true, 2, 0);
+                _addBuff(self, buff);
             }
         } else if (id == 19) {
             _handleDamage(self, enemy, self.damage, randomness);

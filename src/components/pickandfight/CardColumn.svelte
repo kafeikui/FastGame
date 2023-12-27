@@ -26,6 +26,17 @@
 
   function initialize(_cards) {
     initialized = [];
+    for (let i = 0; i < cards.length; i++) {
+      if (oCards[i]) {
+        oCards[i].style.top = `0px`;
+        if (!isEnemy) {
+          oCards[i].style.left = `${i * 100}px`;
+        } else {
+          oCards[i].style.right = `${(6 - i) * 100}px`;
+        }
+        oCards[i].style.zIndex = i;
+      }
+    }
   }
 
   function play(e) {

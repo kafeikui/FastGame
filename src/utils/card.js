@@ -250,7 +250,7 @@ export function getCard(id) {
       );
     case 13:
       buff_value = level == 3 ? 30 : level == 2 ? 20 : 20;
-      turns = level == 3 ? 3 : level == 2 ? 2 : 2;
+      turns = level == 3 ? 4 : level == 2 ? 3 : 2;
       return new Card(
         id,
         level,
@@ -344,7 +344,7 @@ export function getCard(id) {
         id,
         level,
         SectType.Enhance,
-        QualityType.Middle,
+        QualityType.High,
         "整备筹谋",
         "/images/skill/19.png",
         `造成基础伤害`,

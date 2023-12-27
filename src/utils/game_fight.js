@@ -269,7 +269,7 @@ async function addBuff(state, buff) {
   for (let i = 0; i < state.buffCount; i++) {
     if (
       state.buffs[i].duration > 0 &&
-      state.buffs[i].id % MAX_CARD_ID == buff.id % MAX_CARD_ID
+      state.buffs[i].id % (MAX_CARD_ID + 1) == buff.id % (MAX_CARD_ID + 1)
     ) {
       state.buffs[i].duration = 0;
       break;
@@ -304,7 +304,7 @@ function removeBuff2(state, buffId) {
   for (let i = 0; i < state.buffCount; i++) {
     if (
       state.buffs[i].duration > 0 &&
-      state.buffs[i].id % MAX_CARD_ID == buffId % MAX_CARD_ID
+      state.buffs[i].id % (MAX_CARD_ID + 1) == buffId % (MAX_CARD_ID + 1)
     ) {
       state.buffs[i].duration = 0;
       return true;
@@ -670,11 +670,11 @@ async function castCard(card, self, enemy, randomness) {
   } else if (id == 18) {
     await handleDamage(card, self, enemy, self.damage * 2, randomness);
     if (level == 2) {
-      let buff = new Buff(cardId, false, 1, 0);
-      await addBuff(enemy, buff);
+      let buff = new Buff(cardId, true, 1, 0);
+      await addBuff(self, buff);
     } else if (level == 3) {
-      let buff = new Buff(cardId, false, 2, 0);
-      await addBuff(enemy, buff);
+      let buff = new Buff(cardId, true, 2, 0);
+      await addBuff(self, buff);
     }
   } else if (id == 19) {
     await handleDamage(card, self, enemy, self.damage, randomness);

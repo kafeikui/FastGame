@@ -41,7 +41,9 @@
     LOW_QUALITY_CARD_IDS,
     MIDDLE_QUALITY_CARD_IDS,
     HIGH_QUALITY_CARD_IDS,
+    QualityType,
     repeatedDraw,
+    getCard,
   } from "../../utils/card";
   import { MAX_CARD_ID } from "../../constants/card_constant";
   import { PlayerState, IdentityType } from "../../utils/game_fight";
@@ -283,10 +285,9 @@
 
   function onShowHelp() {
     broadcastSe(SE.Click);
-    let helpText = `
-    3 rounds will be played in total, with 2/2/3 innings respectively (the initial order will be randomly determined, and the loser will on the offensive in the next inning).
+    let helpText = `The card pool will be generated randomly at the beginning of each Round. In the first inning players pick cards from the card pool, and at the beginning of each other round, players will get 2 cards with quality of corresponding to this round.
 
-    Drag the card to the sequence. Click "start to fight" to commit sequence, then start the fight at arena. Each inning has a time limit of 300 seconds. Hurry back to the war room so that you can have more time to think. If the opponent does not commit sequence within the limited time, you can claim the victory.
+    Drag the card to the sequence. Click "Start Fighting!" to commit sequence, then start the fight at arena. Each inning has a time limit of 300 seconds. Hurry back to the war room so that you can have more time to think. If the opponent does not commit sequence within the limited time, you can claim the victory.
     
     You can choose the following two ways to strengthen your sequence: 
     (1) Upgrade: Drag a card with the same name to the sequence. Up to level 3.
@@ -349,7 +350,7 @@
     let pickedCards = event.detail.pickedCards;
     if (
       pickedCards.length == 1 &&
-      LOW_QUALITY_CARD_IDS.indexOf(selfCards[pickedCards[0].index].id) != -1
+      getCard(selfCards[pickedCards[0].index].id).quality == QualityType.Low
     ) {
       alert(`The quality of the card is too low to reforge!`);
     } else {
@@ -575,7 +576,7 @@
     oMmessageBoard.initMessages(
       [oMmessageBoard.createMessage("Waiting for the game to start...")],
       oMmessageBoard.createMessage(
-        "Welcome! Let's have a card battle! 3 rounds in total, 2/2/3 innings of each round."
+        "3 rounds will be played in total, with 2/2/3 innings respectively (the initial action order will be randomly determined, and the loser will on the offensive in the next inning)."
       )
     );
   }

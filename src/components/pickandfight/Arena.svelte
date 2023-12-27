@@ -50,67 +50,6 @@
     "AbortError"
   );
 
-  // function prepareFight() {
-  //     self = new PlayerState(
-  //       IdentityType.Self,
-  //       0,
-  //       12000,
-  //       12000,
-  //       600,
-  //       100,
-  //       10,
-  //       10,
-  //       200,
-  //       100,
-  //       100,
-  //       Actionable.Normal,
-  //       0,
-  //       []
-  //     );
-  //     enemy = new PlayerState(
-  //       IdentityType.Enemy,
-  //       0,
-  //       12000,
-  //       12000,
-  //       600,
-  //       100,
-  //       10,
-  //       10,
-  //       200,
-  //       100,
-  //       100,
-  //       Actionable.Normal,
-  //       0,
-  //       []
-  //     );
-  //     // they are all of defense and heal sect cards of highest level which will result in a long fight
-  //     selfSequence = (function () {
-  //       let sequence = [];
-  //       sequence[0] = 22 + 2 * (MAX_CARD_ID + 1);
-  //       sequence[1] = 24 + 2 * (MAX_CARD_ID + 1);
-  //       sequence[2] = 22 + 2 * (MAX_CARD_ID + 1);
-  //       sequence[3] = 24 + 2 * (MAX_CARD_ID + 1);
-  //       sequence[4] = 27 + 2 * (MAX_CARD_ID + 1);
-  //       sequence[5] = 16 + 2 * (MAX_CARD_ID + 1);
-  //       sequence[6] = 15 + 2 * (MAX_CARD_ID + 1);
-  //       return sequence;
-  //     })();
-
-  //     enemySequence = (function () {
-  //       let sequence = [];
-  //       sequence[0] = 22 + 2 * (MAX_CARD_ID + 1);
-  //       sequence[1] = 24 + 2 * (MAX_CARD_ID + 1);
-  //       sequence[2] = 27 + 2 * (MAX_CARD_ID + 1);
-  //       sequence[3] = 16 + 2 * (MAX_CARD_ID + 1);
-  //       sequence[4] = 15 + 2 * (MAX_CARD_ID + 1);
-  //       sequence[5] = 13 + 2 * (MAX_CARD_ID + 1);
-  //       sequence[6] = 10 + 2 * (MAX_CARD_ID + 1);
-  //       return sequence;
-  //     })();
-  //     selfFirst = true;
-  //     randomness = web3.utils.toBN(web3.utils.soliditySha3(42));
-  //   }
-
   onMount(() => {
     setNormalRoundPause();
   });
@@ -192,6 +131,8 @@
 
   async function reset() {
     broadcastSe(SE.Click);
+    selfSequence = [...selfSequence];
+    enemySequence = [...enemySequence];
     if (selfForInit == undefined) {
       //deep copy
       selfForInit = JSON.parse(JSON.stringify(self));
@@ -211,7 +152,7 @@
     let intervalBeforeFight = 500;
     if (isFighting) {
       fightAborted = true;
-      intervalBeforeFight = 3000;
+      intervalBeforeFight = 2000;
     }
     setTimeout(async () => {
       oReset.disabled = false;
@@ -467,14 +408,21 @@
         </div>
       </div>
       <div class="game-bar">
-        <span> {selfFirst ? "on the offensive" : "on the defensive"} </span>
-        <span> Fight Outcome: {outcome} </span>
-        <button disabled on:click={skip} bind:this={oSkip}> Skip </button>
         <div class="vs-bar">
           <div class="v"></div>
           <div class="s"></div>
         </div>
-        <div>Round: {round + 1}</div>
+        <div class="game-params">
+          <div>
+            {selfFirst ? "on the offensive" : "on the defensive"}
+          </div>
+          <div>
+            Fight Outcome: <span style="color:#9b4400;font-weight:bold"
+              >{outcome}</span
+            >
+          </div>
+          <div>Round: {round + 1}</div>
+        </div>
         <div>
           <button on:click={reset} bind:this={oReset}> Start / Reset </button>
           <button disabled on:click={setNormalRoundPause} bind:this={oNormal}>
@@ -483,6 +431,7 @@
           <button on:click={setQuickRoundPause} bind:this={oQuick}>
             Quick
           </button>
+          <button disabled on:click={skip} bind:this={oSkip}> Skip </button>
         </div>
       </div>
       <div class="state-bar-enemy">
@@ -592,19 +541,29 @@
     flex-direction: column;
     align-items: center;
   }
+  .game-params {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 24px;
+    margin-bottom: 20px;
+    margin-top: 20px;
+  }
   .vs-bar {
     display: flex;
     flex-direction: row;
   }
   .v {
-    width: 100px;
-    height: 100px;
+    width: 80px;
+    height: 80px;
     background-image: url(/images/v.png);
+    background-size: cover;
   }
   .s {
-    width: 100px;
-    height: 100px;
+    width: 80px;
+    height: 80px;
     background-image: url(/images/s.png);
+    background-size: cover;
   }
   .actor-bar {
     border-style: solid;
