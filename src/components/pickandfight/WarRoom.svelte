@@ -96,14 +96,15 @@
   let oAudio;
   let oMmessageBoard;
   let oHelpBoard;
-  let oClaimVictoryButton;
+  let oSettleButton;
   let helpText;
+  let helpBoardHeight;
   let musicTimer;
 
   let canPlay = true;
   let canReforge = true;
   let canRestart = false;
-  let canClaimVictory = false;
+  let canSettle = false;
   let canHelpBack = false;
   let canHandPick = false;
   let canHandPan = true;
@@ -121,10 +122,6 @@
   let opponentCommited;
   let hasStartedFight = false;
   let hasInitialCardPoolPick = false;
-
-  $: sequenceUpperBound = availableSequence[currentRound];
-  $: concealButtonEnabled =
-    isConceal || onCardPick || onCardPoolPick || onWaitingPage;
 
   let subscriptions = [];
   let availableSequence = [3, 5, 7];
@@ -155,13 +152,19 @@
   let opponentScore = 0;
   let isSelfOffensive;
   let nextCommitmentTime;
-  let timeToCountDown;
+  let timeToCountDown = 999;
+  let timePhase = "Preparing";
 
   let self = PlayerState.placeholder();
   let enemy = PlayerState.placeholder();
   let fightRandomness;
   let outcome = "waiting...";
   let round = 0;
+
+  $: sequenceUpperBound = availableSequence[currentRound];
+  $: concealButtonEnabled =
+    isConceal || onCardPick || onCardPoolPick || onWaitingPage;
+  $: time = `${timePhase}... ${timeToCountDown}`;
 
   onMount(async () => {
     pauseInteraction();
@@ -200,10 +203,10 @@
   });
 
   afterUpdate(() => {
-    if (canClaimVictory) {
-      oClaimVictoryButton.style.zIndex = 1001;
+    if (canSettle) {
+      oSettleButton.style.zIndex = 1001;
     } else {
-      oClaimVictoryButton.style.zIndex = 1;
+      oSettleButton.style.zIndex = 1;
     }
     if (onWaitingPage) {
       oHelpBoard.style.display = "block";
@@ -233,7 +236,11 @@
     currentInning = 0;
     selfScore = 0;
     opponentScore = 0;
-    canClaimVictory = false;
+    canSettle = false;
+    timePhase = "Preparing";
+    timeToCountDown = 999;
+    selfCommited = false;
+    opponentCommited = false;
     hasInitialCardPoolPick = false;
     oHelpBoard.style.display = "none";
 
@@ -260,20 +267,23 @@
   }
 
   async function countDownCommitmentTime() {
-    if (hasStartedFight) {
+    if (hasStartedFight || canRestart) {
+      canSettle = false;
       stopSe(SE.Tick);
       return;
     }
-    if (timeToCountDown > 5) {
-      timeToCountDown--;
-      if (!isPlaying(SE.Tick)) {
-        broadcastSe(SE.Tick, false);
-      }
-      setTimeout(countDownCommitmentTime, 1000);
-    } else {
-      stopSe(SE.Tick);
-      await onFight();
+    timeToCountDown--;
+    if (!isPlaying(SE.Tick)) {
+      broadcastSe(SE.Tick, false);
     }
+    if (timeToCountDown == 5 && !selfCommited) {
+      stopSe(SE.Tick);
+      setTimeout(onFight, 0);
+    }
+    if (timeToCountDown < 0) {
+      canSettle = true;
+    }
+    setTimeout(countDownCommitmentTime, 1000);
   }
 
   function onHelpBack() {
@@ -294,7 +304,7 @@
     (2) Reforge: Click the reforge button, consume several cards, and confirm to create a higher quality card. The quality of the reforging card equals to (the sum of the qualities of the cards)/2, rounded down, and the corresponding quality card is selected from three random options.
     
     Think twice before acting. The sequence will be committed automatically when the countdown reaches the last 5 seconds.`;
-    showWaitingPage(helpText, true);
+    showWaitingPage(helpText, true, 800);
   }
 
   function onConceal() {
@@ -403,9 +413,10 @@
     canHandPick = false;
   }
 
-  function showWaitingPage(_helpText, _canHelpBack) {
+  function showWaitingPage(_helpText, _canHelpBack, _boardHeight = 500) {
     canHelpBack = _canHelpBack;
     helpText = _helpText;
+    helpBoardHeight = _boardHeight;
     onWaitingPage = true;
     oHidden.style.display = "block";
   }
@@ -629,16 +640,16 @@
 
   async function onFight() {
     broadcastSe(SE.Click);
-    hasStartedFight = true;
-    timeToCountDown = "committing";
     pauseInteraction();
-    showWaitingPage("Waiting for the battle to begin...", false);
+    showWaitingPage(
+      `Waiting for the battle to begin...
+    (You can click settle button to claim victory after the timeout)`,
+      false
+    );
     await commitSequence();
-
+    timePhase = "Committed";
     selfCommited = true;
     if (opponentCommited) {
-      opponentCommited = false;
-      selfCommited = false;
       newMessage("Sending the original sequence...");
       newMessage("Waiting for the opponent to commit...", false);
       await submitSequence();
@@ -660,6 +671,7 @@
       }
     }
     await web3RevealSequence(web3, contractAddress, tableId, revealedSequence);
+    timePhase = "Revealed";
   }
 
   function pauseInteraction() {
@@ -693,8 +705,8 @@
     startTablePick();
   }
 
-  async function onClaimVictory() {
-    canClaimVictory = false;
+  async function onSettle() {
+    canSettle = false;
     try {
       newMessage("Try claiming victory...");
       await web3ClaimVictory(web3, contractAddress, tableId);
@@ -704,7 +716,7 @@
       canRestart = true;
     } catch (e) {
       console.log(e);
-      canClaimVictory = true;
+      canSettle = true;
       newMessage(
         "Claim failed, the opponent's action has not timed out yet!",
         true
@@ -731,7 +743,10 @@
     oWarRoom.style.display = "flex";
     oArena.style.display = "none";
     hasStartedFight = false;
+    selfCommited = false;
+    opponentCommited = false;
     await warRoomResumeCallback();
+    timePhase = "Preparing";
     if (!canRestart) {
       resumeInteraction();
     }
@@ -854,7 +869,6 @@
     isSelfOffensive = isTableCreator
       ? firstPlayerOffensive
       : !firstPlayerOffensive;
-    canClaimVictory = true;
     timeToCountDown = nextCommitmentTime - Math.floor(Date.now() / 1000);
     await countDownCommitmentTime();
   }
@@ -887,8 +901,6 @@
     newMessage("Your opponent has committed the sequence.");
     opponentCommited = true;
     if (selfCommited) {
-      selfCommited = false;
-      opponentCommited = false;
       newMessage("Sending the original sequence...");
       await submitSequence();
     }
@@ -959,6 +971,7 @@
     };
 
     startFight(randomness, selfWin);
+    hasStartedFight = true;
   }
 
   async function handleRoundEnded(event) {
@@ -975,7 +988,7 @@
       );
     }
     pauseInteraction();
-    canClaimVictory = false;
+    canSettle = false;
     canRestart = true;
   }
 </script>
@@ -988,7 +1001,7 @@
         opponentAddress={opponentName}
         round={currentRound}
         inning={currentInning}
-        time={timeToCountDown}
+        {time}
         {selfScore}
         {opponentScore}
         {isSelfOffensive}
@@ -1023,12 +1036,12 @@
         >
           <button
             slot="exbutton"
-            class="claimVictoryButton"
-            disabled={!canClaimVictory}
-            bind:this={oClaimVictoryButton}
-            on:click={onClaimVictory}
+            class="settleButton"
+            disabled={!canSettle}
+            bind:this={oSettleButton}
+            on:click={onSettle}
           >
-            Claim Victory
+            Settle
           </button>
         </ControlPanel>
       </div>
@@ -1065,7 +1078,12 @@
   <div class="desc" bind:this={oDesc} />
   <div class="hidden" bind:this={oHidden} />
   <div class="help-box" bind:this={oHelpBoard}>
-    <HelpBoard {helpText} canBack={canHelpBack} on:back={onHelpBack} />
+    <HelpBoard
+      {helpText}
+      boardHeight={helpBoardHeight}
+      canBack={canHelpBack}
+      on:back={onHelpBack}
+    />
   </div>
   <TablePicker
     onPick={onTablePick}
@@ -1188,7 +1206,7 @@
     z-index: 1005;
     font-weight: bold;
   }
-  .claimVictoryButton {
+  .settleButton {
     position: relative;
     font-family: "Comic Sans MS", cursive;
     font-size: 1.6em;

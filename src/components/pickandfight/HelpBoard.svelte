@@ -5,7 +5,9 @@
 
   export let helpText;
   export let canBack;
-
+  export let boardHeight;
+  let oHelpBoard;
+  let oHelpText;
   let oBack;
 
   function back() {
@@ -13,6 +15,13 @@
   }
 
   afterUpdate(() => {
+    if (oHelpBoard) {
+      oHelpBoard.style.height = boardHeight + "px";
+      oHelpBoard.style.backgroundSize = "1600px " + boardHeight + "px";
+    }
+    if (oHelpText) {
+      oHelpText.style.height = boardHeight + "px";
+    }
     if (canBack) {
       oBack.style.display = "flex";
     } else {
@@ -21,8 +30,8 @@
   });
 </script>
 
-<div class="help-board">
-  <div class="help-text">
+<div class="help-board" bind:this={oHelpBoard}>
+  <div class="help-text" bind:this={oHelpText}>
     {helpText}
   </div>
   <button class="back" on:click={back} bind:this={oBack}>Back</button>
@@ -46,6 +55,7 @@
   }
   .help-text {
     position: absolute;
+    margin-top: 30px;
     left: 50%;
     transform: translate(-50%);
     display: flex;
@@ -64,9 +74,9 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    right: 4%;
+    right: 8%;
+    bottom: 2%;
     transform: translate(-50%);
-    bottom: 100px;
     width: 200px;
     height: 50px;
     z-index: 1002;

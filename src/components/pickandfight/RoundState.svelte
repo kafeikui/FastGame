@@ -28,7 +28,7 @@
     <div class="inning">inning: {inning + 1}</div>
   </div>
   <div style="width: 5%;" />
-  <div class="state_params">
+  <div class="operation_params">
     <div class="order">
       {isSelfOffensive ? "on the offensive" : "on the defensive"}
     </div>
@@ -81,5 +81,10 @@
   }
   .state_params {
     font-size: 24px;
+    width: 120px;
+  }
+  .operation_params {
+    font-size: 24px;
+    width: 280px;
   }
 </style>
