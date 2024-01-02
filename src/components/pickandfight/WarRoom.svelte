@@ -818,6 +818,7 @@
     outcome = selfWin ? "win" : "lose";
     round = 0;
 
+    oOpponentSequenceBox.style.display = "none";
     oArena.style.display = "block";
   }
 
