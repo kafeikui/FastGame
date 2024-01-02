@@ -38,8 +38,10 @@
   </div>
   <div style="width: 5%;" />
   <button class="help_icon" on:click={showHelp} />
-  <div style="width: 5%;" />
+  <div style="width: 1%;" />
   <slot name="audioVolumn" />
+  <slot name="opponentSequence" />
+  <slot name="battleSimulation" />
 </div>
 <div class="address_box">
   opponent

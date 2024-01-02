@@ -46,7 +46,12 @@
     getCard,
   } from "../../utils/card";
   import { MAX_CARD_ID } from "../../constants/card_constant";
-  import { PlayerState, IdentityType } from "../../utils/game_fight";
+  import {
+    PlayerState,
+    IdentityType,
+    fight,
+    clearCallback as clearFightCallback,
+  } from "../../utils/game_fight";
   import {
     broadcastSe,
     stopSe,
@@ -97,6 +102,7 @@
   let oMmessageBoard;
   let oHelpBoard;
   let oSettleButton;
+  let oOpponentSequenceBox;
   let helpText;
   let helpBoardHeight;
   let musicTimer;
@@ -136,8 +142,9 @@
     undefined,
     undefined,
   ];
-  let selfSequence = [];
-  let opponentSequence = [];
+  let selfIdSequence = [];
+  let opponentIdSequence = [0, 0, 0];
+  let opponentSequence = [getCard(0), getCard(0), getCard(0)];
   let hands = [];
   let cardsToPick = [];
   let currentReforgeRequestId;
@@ -227,8 +234,9 @@
       undefined,
       undefined,
     ];
-    selfSequence = [];
-    opponentSequence = [];
+    selfIdSequence = [];
+    opponentIdSequence = [0, 0, 0];
+    opponentSequence = [getCard(0), getCard(0), getCard(0)];
     hands = [];
     tableId = 0;
     opponentName = "A worthy opponent";
@@ -643,6 +651,7 @@
     pauseInteraction();
     showWaitingPage(
       `Waiting for the battle to begin...
+
     (You can click settle button to claim victory after the timeout)`,
       false
     );
@@ -657,16 +666,16 @@
   }
 
   async function submitSequence() {
-    selfSequence = [];
+    selfIdSequence = [];
     let revealedSequence = [];
     for (let i = 0; i < availableSequence[currentRound]; i++) {
       if (sequence[i]) {
-        selfSequence.push(sequence[i].id);
+        selfIdSequence.push(sequence[i].id);
         revealedSequence.push(
           new RevealedCard(sequence[i].index, sequence[i].id, sequence[i].salt)
         );
       } else {
-        selfSequence.push(0);
+        selfIdSequence.push(0);
         revealedSequence.push(new RevealedCard(0, 0, 0));
       }
     }
@@ -738,6 +747,51 @@
     }
   }
 
+  function onShowOpponentSequence() {
+    broadcastSe(SE.Click);
+    if (oOpponentSequenceBox.style.display == "flex") {
+      oOpponentSequenceBox.style.display = "none";
+    } else {
+      oOpponentSequenceBox.style.display = "flex";
+    }
+  }
+
+  async function onSimulateBattle() {
+    broadcastSe(SE.Click);
+    oHidden.style.display = "block";
+    clearFightCallback();
+    selfIdSequence = [];
+    for (let i = 0; i < availableSequence[currentRound]; i++) {
+      if (sequence[i]) {
+        selfIdSequence.push(sequence[i].id);
+      } else {
+        selfIdSequence.push(0);
+      }
+    }
+    // simulate 200 times then count chance of winning
+    let winCount = 0;
+    for (let i = 0; i < 200; i++) {
+      prepareNextBattle();
+      let randomNumber = Math.floor(Math.random() * 10000) + 1;
+      let simulationRandomness = web3.utils.toBN(randomNumber);
+
+      let selfWin = await fight(
+        self,
+        enemy,
+        selfIdSequence,
+        opponentIdSequence,
+        isSelfOffensive,
+        simulationRandomness
+      );
+      if (selfWin) {
+        winCount++;
+      }
+    }
+    let winRate = winCount / 200;
+    newMessage(`Battle simulation win rate: ${(winRate * 100).toFixed(4)}%`);
+    oHidden.style.display = "none";
+  }
+
   async function onArenaSkip() {
     playMusic();
     oWarRoom.style.display = "flex";
@@ -758,6 +812,16 @@
     oWarRoom.style.display = "none";
     oDesc.style.display = "none";
 
+    prepareNextBattle();
+
+    fightRandomness = web3.utils.toBN(randomness);
+    outcome = selfWin ? "win" : "lose";
+    round = 0;
+
+    oArena.style.display = "block";
+  }
+
+  function prepareNextBattle() {
     let maxHealth;
     let damage;
     if (currentRound == 0) {
@@ -775,12 +839,6 @@
 
     self = PlayerState.buildPlayerState(IdentityType.Self, maxHealth, damage);
     enemy = PlayerState.buildPlayerState(IdentityType.Enemy, maxHealth, damage);
-
-    fightRandomness = web3.utils.toBN(randomness);
-    outcome = selfWin ? "win" : "lose";
-    round = 0;
-
-    oArena.style.display = "block";
   }
 
   function printGameScores() {
@@ -911,8 +969,11 @@
       "Your opponent has played the sequence, the inning will start soon."
     );
     let revealedSequence = event.returnValues.cards;
-    opponentSequence = revealedSequence.map((card) => {
+    opponentIdSequence = revealedSequence.map((card) => {
       return parseInt(card.id);
+    });
+    opponentSequence = revealedSequence.map((card) => {
+      return getCard(card.id);
     });
   }
 
@@ -1010,6 +1071,16 @@
         <div slot="audioVolumn" class="audioVolumnButton">
           <AudioVolumn {isMuted} on:switchVol={onSwitchAudioVolumn} />
         </div>
+        <div
+          slot="opponentSequence"
+          class="opponentSequenceButton"
+          on:click={onShowOpponentSequence}
+        ></div>
+        <div
+          slot="battleSimulation"
+          class="battleSimulationButton"
+          on:click={onSimulateBattle}
+        ></div>
       </RoundState>
     </div>
     <div class="messageBox">
@@ -1063,8 +1134,8 @@
       on:skip={onArenaSkip}
       {self}
       {enemy}
-      {selfSequence}
-      enemySequence={opponentSequence}
+      selfSequence={selfIdSequence}
+      enemySequence={opponentIdSequence}
       selfFirst={isSelfOffensive}
       randomness={fightRandomness}
       {outcome}
@@ -1105,6 +1176,13 @@
   <button class="conceal" disabled={!concealButtonEnabled} on:click={onConceal}
     >{isConceal ? "Return" : "Conceal"}</button
   >
+  <div class="opponent-sequence-box" bind:this={oOpponentSequenceBox}>
+    <Sequence
+      sequence={opponentSequence}
+      canPan={false}
+      availableSequence={sequenceUpperBound}
+    />
+  </div>
 </body>
 
 <style>
@@ -1219,5 +1297,32 @@
     width: 50px;
     height: 50px;
     border-radius: 10px;
+    cursor: pointer;
+  }
+  .opponentSequenceButton {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    background-image: url(/images/show_opponent_sequence.png);
+    background-size: cover;
+    cursor: pointer;
+  }
+  .battleSimulationButton {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    background-image: url(/images/simulation.png);
+    background-size: cover;
+    cursor: pointer;
+  }
+  .opponent-sequence-box {
+    display: none;
+    position: absolute;
+    top: 8vh;
+    left: -15vh;
+    border-style: none;
+    justify-content: space-between;
+    width: 106%;
+    scale: 0.8;
   }
 </style>

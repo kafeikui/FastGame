@@ -41,6 +41,18 @@ let preCastCardCallback;
 let postCastCardCallback;
 let addBuffCallback;
 
+export function clearCallback() {
+  applyPassiveCardCallback = () => {};
+  triggerRoundBuffCallback = () => {};
+  handleRoundBuffCallback = () => {};
+  applyBuffCallback = () => {};
+  applyTimedBuffCallback = () => {};
+  handleDamageCallback = () => {};
+  preCastCardCallback = () => {};
+  postCastCardCallback = () => {};
+  addBuffCallback = () => {};
+}
+
 export function setCallback(
   applyPassiveCard,
   triggerRoundBuff,
