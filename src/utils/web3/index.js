@@ -151,6 +151,19 @@ export const getPlayers = async (web3, contractAddress, tableId) => {
   }
 };
 
+export const getPlayerState = async (
+  web3,
+  contractAddress,
+  tableId,
+  player
+) => {
+  if (web3 && !isDebugUI) {
+    let instance = getContract(web3, contractAddress);
+    let method = instance.methods.playerStates(tableId, player);
+    return callView(web3, method);
+  }
+};
+
 // ===============================
 // events
 // ===============================

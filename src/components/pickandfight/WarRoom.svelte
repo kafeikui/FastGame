@@ -33,6 +33,7 @@
     reforgeCard as web3ReforgeCard,
     summitReforge as web3SummitReforge,
     getPlayers as web3GetPlayers,
+    getPlayerState as web3GetPlayerState,
     claimVictory as web3ClaimVictory,
     getSalt,
     sendETH,
@@ -125,6 +126,7 @@
   let concealResumeCallback;
   let warRoomResumeCallback;
   let selfCommited;
+  let selfRevealed;
   let opponentCommited;
   let hasStartedFight = false;
   let hasInitialCardPoolPick = false;
@@ -283,6 +285,20 @@
     timeToCountDown--;
     if (!isPlaying(SE.Tick)) {
       broadcastSe(SE.Tick, false);
+    }
+    if (timeToCountDown % 5 == 0 && selfCommited && !selfRevealed) {
+      setTimeout(async () => {
+        let opponentState = await web3GetPlayerState(
+          web3,
+          contractAddress,
+          tableId,
+          opponentName
+        );
+        if (opponentState.sequenceCommitment > 0) {
+          opponentCommited = true;
+          await submitSequence();
+        }
+      }, 0);
     }
     if (timeToCountDown == 5 && !selfCommited) {
       stopSe(SE.Tick);
@@ -681,6 +697,7 @@
     }
     await web3RevealSequence(web3, contractAddress, tableId, revealedSequence);
     timePhase = "Revealed";
+    selfRevealed = true;
   }
 
   function pauseInteraction() {
@@ -798,6 +815,7 @@
     oArena.style.display = "none";
     hasStartedFight = false;
     selfCommited = false;
+    selfRevealed = false;
     opponentCommited = false;
     await warRoomResumeCallback();
     timePhase = "Preparing";
